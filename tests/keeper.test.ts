@@ -228,6 +228,14 @@ describe('retries', () => {
     expect(f.keeper.core.retry).toBe(null)
   })
 
+  test('reads the error after a partial answer', async () => {
+    const f = fakeOf()
+    f.lastText = 'API Error: Connection lost mid-response. The response above may be incomplete.'
+    await turn(f, 'error', 'Half of an answer')
+    await f.advance(2_000)
+    expect(f.keeper.core.retry?.family).toBe('interrupted')
+  })
+
   test('one failure is handled once when both signals arrive', async () => {
     const f = fakeOf({ overload: { backoffSeconds: [30], jitterMode: 'proportional', jitterPct: 0 } })
     await f.keeper.onTurnStart()
@@ -257,14 +265,6 @@ describe('wrap-up nudge', () => {
     await f.advance(2_000)
     expect(f.submitted).toEqual([])
   })
-  test('reads the error after a partial answer', async () => {
-    const f = fakeOf()
-    f.lastText = 'API Error: Connection lost mid-response. The response above may be incomplete.'
-    await turn(f, 'error', 'Half of an answer')
-    await f.advance(2_000)
-    expect(f.keeper.core.retry?.family).toBe('interrupted')
-  })
-
 })
 
 describe('compaction', () => {
