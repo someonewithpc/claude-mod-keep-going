@@ -66,3 +66,31 @@ export function viewOf(core: KeepGoingCore, config: Config, now: number): KeepGo
 
   return { line: config.ui.statusLine === 'always' ? 'watching' : null, detail: null, actions: [] }
 }
+
+/**
+ * The short badge a statusline script can show beside its own fields, as
+ * claude-keep-going's tmux and statusline badge did: 🟢KG while watching,
+ * a countdown while something is pending.
+ */
+export function badgeOf(core: KeepGoingCore, now: number): string {
+  if (core.isPaused) return '⏸KG'
+  const u = core.usage
+  if (u !== null) {
+    if (u.isGivenUp) return '🔴KG'
+    const left = Math.max(0, u.until - now)
+    const minutes = Math.floor(left / 60_000)
+    return minutes >= 60
+      ? `⏳KG ${Math.floor(minutes / 60)}h${String(minutes % 60).padStart(2, '0')}m`
+      : `⏳KG ${minutes}m`
+  }
+  if (core.fallback !== null && core.fallback.phase !== 'switch') return '🔀KG'
+  const r = core.retry
+  if (r !== null) {
+    if (r.isGivenUp) return '🔴KG'
+    const icon = r.family === 'overload' ? '🟠' : r.family === 'safeguard' ? '🛡' : '🔁'
+    return r.isAwaitingResult ? `${icon}KG` : `${icon}KG ${Math.max(0, Math.round((r.until - now) / 1000))}s`
+  }
+  const at = core.compact.scheduledFor
+  if (at > now) return `🟢KG 🗜${Math.ceil((at - now) / 60_000)}m`
+  return '🟢KG'
+}

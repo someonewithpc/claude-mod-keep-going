@@ -5,7 +5,7 @@ import { classify, type Failure } from './classify'
 import { decideCompact } from './compact'
 import { DEFAULTS, type Config } from './config'
 import { parseResetTime, calculateWaitMs } from './lib/time-parser.js'
-import { viewOf, clockOf, durationOf } from './view'
+import { badgeOf, viewOf, clockOf, durationOf } from './view'
 import type { KeepGoingCore, KeepGoingRetryFamily, KeepGoingView } from '../types'
 
 /**
@@ -17,6 +17,8 @@ export type Io = {
   saveState: (core: KeepGoingCore, view: KeepGoingView | null) => Promise<void>
   loadCore: () => Promise<KeepGoingCore | null | undefined>
   status: (text: string | undefined) => void
+  /** Writes the badge a statusline script reads, '' when the session ends. */
+  writeBadge: (badge: string) => Promise<void>
   storeGet: (key: string) => Promise<unknown>
   storeSet: (key: string, value: unknown) => Promise<void>
   storeKeys: () => Promise<string[]>
@@ -97,6 +99,7 @@ export class Keeper {
   random: () => number = Math.random
   private isTicking = false
   private lastView = ''
+  private lastBadge = ''
 
   io!: Io
 
@@ -110,6 +113,11 @@ export class Keeper {
     this.lastView = viewKey
     await this.io.saveState(this.core, isNewView ? view : null)
     if (isNewView) this.showStatus(view)
+    const badge = badgeOf(this.core, now)
+    if (badge !== this.lastBadge) {
+      this.lastBadge = badge
+      await this.io.writeBadge(badge).catch(() => {})
+    }
     if (this.sessionId !== '') {
       await this.io.storeSet(`session:${this.sessionId}`, {
         savedAt: now,

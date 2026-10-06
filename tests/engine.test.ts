@@ -9,6 +9,7 @@ type World = {
   compacted: (string | undefined)[]
   statuses: (string | undefined)[]
   transcript: string[]
+  badges: string[]
   clock: ReturnType<typeof mock.clock>
 }
 
@@ -19,10 +20,11 @@ function worldOf(on: On, files: Record<string, string> = {}): World {
     compacted: [],
     statuses: [],
     transcript: [],
+    badges: [],
     clock: mock.clock(on, { now: NOW }),
   }
   mock.store(on)
-  mock.env(on, { HOME: '/home/t' })
+  mock.env(on, { HOME: '/home/t', XDG_RUNTIME_DIR: '/run/user/1000' })
 
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
@@ -45,7 +47,10 @@ function worldOf(on: On, files: Record<string, string> = {}): World {
     if (text === undefined) throw new Error('ENOENT')
     return { value: text }
   })
-  on('fs.write', () => ({ value: undefined }))
+  on('fs.write', ($, e) => {
+    if (e.path.includes('/badge/')) world.badges.push(e.text)
+    return { value: undefined }
+  })
   on('http.fetch', () => ({ value: { status: 200, ok: true, headers: {}, text: '' } }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('tool.register', ($, e) => ({ value: { tool: `mcp__keep-going__${e.name}` } }))

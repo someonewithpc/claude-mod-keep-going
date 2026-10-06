@@ -318,6 +318,19 @@ describe('model fallback', () => {
   })
 })
 
+describe('badge', () => {
+  test('counts down a usage wait, then goes back to green', async () => {
+    const f = fakeOf({ native: { usageLimit: 'ignore' }, networkCheck: { enabled: false } })
+    await f.keeper.save()
+    await f.keeper.onTurnStart()
+    await f.keeper.onStopFailure('rate_limit', "You've hit your session limit · resets 2pm (UTC)")
+    await f.keeper.onTurnComplete('error', '')
+    await f.advance(80 * MIN)
+    await turn(f, 'answer')
+    expect(f.badges).toEqual(['🟢KG', '⏳KG 2h01m', '⏳KG 41m', '🟢KG'])
+  })
+})
+
 describe('restart', () => {
   test('a usage wait comes back after a restart from the store', async () => {
     const f = fakeOf()

@@ -40,6 +40,7 @@ export const register: Register = (on, options) => {
   let isLogDirty = false
   let uiLog: ((text: string, toTranscript: boolean) => void) | null = null
   let flushLog: () => Promise<void> = async () => {}
+  let badgePath = ''
 
   const write = (level: string, line: string, toTranscript: boolean) => {
     const d = new Date()
@@ -78,6 +79,7 @@ export const register: Register = (on, options) => {
       },
       loadCore: async () => (await $.state.get(CORE)).value,
       status: (text) => $.ui.status(text),
+      writeBadge: (badge) => $.fs.write(badgePath, badge === '' ? '' : `${badge}\n`),
       storeGet: (key) => $.store.get(key),
       storeSet: (key, value) => $.store.set(key, value),
       storeKeys: () => $.store.keys(),
@@ -117,6 +119,7 @@ export const register: Register = (on, options) => {
     const configHome = (await $.env.get('XDG_CONFIG_HOME')) || `${home}/.config`
     const configDirs = ((await $.env.get('XDG_CONFIG_DIRS')) || '/etc/xdg').split(':').filter(Boolean)
     const stateHome = (await $.env.get('XDG_STATE_HOME')) || `${home}/.local/state`
+    const runtimeDir = (await $.env.get('XDG_RUNTIME_DIR')) || '/tmp'
 
     const files = []
     for (const path of [...[...configDirs].reverse().map((dir) => `${dir}/claude-keep-going/config.json`), `${configHome}/claude-keep-going/config.json`]) {
@@ -127,6 +130,7 @@ export const register: Register = (on, options) => {
     const sessionId = await $.session.id()
     const day = new Date().toISOString().slice(0, 10)
     logPath = `${stateHome}/claude-keep-going/logs/mod-${day}-${sessionId.slice(0, 8)}.log`
+    badgePath = `${runtimeDir}/claude-keep-going/badge/${sessionId}`
     await keeper.restore(sessionId)
 
     try {
@@ -170,6 +174,7 @@ export const register: Register = (on, options) => {
 
   on('session.end', async ($, e, next) => {
     await flushLog()
+    if (badgePath !== '') await $.fs.write(badgePath, '').catch(() => {})
     return next(e)
   })
 

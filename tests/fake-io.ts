@@ -13,6 +13,7 @@ export type Fake = {
   notices: string[]
   infos: string[]
   status: (string | undefined)[]
+  badges: string[]
   rateLimits: SessionRateLimit[]
   context: { percent: number | null; tokens: number | null; isSubscription: boolean }
   isReachable: boolean
@@ -44,6 +45,7 @@ export function fakeOf(raw: unknown = {}, now = Date.UTC(2026, 9, 6, 12, 0)): Fa
     notices,
     infos,
     status: [],
+    badges: [],
     rateLimits: [],
     context: { percent: null, tokens: null, isSubscription: true },
     isReachable: true,
@@ -73,6 +75,9 @@ export function fakeOf(raw: unknown = {}, now = Date.UTC(2026, 9, 6, 12, 0)): Fa
     },
     loadCore: async () => held,
     status: (text) => fake.status.push(text),
+    writeBadge: async (badge) => {
+      fake.badges.push(badge)
+    },
     storeGet: async (key) => store.get(key),
     storeSet: async (key, value) => {
       store.set(key, value)
