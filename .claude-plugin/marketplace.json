@@ -1,0 +1,5 @@
+{
+  "name": "claude-mod-keep-going",
+  "owner": { "name": "Hugo Sales" },
+  "plugins": [{ "name": "keep-going", "source": "./" }]
+}
