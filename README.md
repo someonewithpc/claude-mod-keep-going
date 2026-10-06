@@ -38,8 +38,11 @@ programs.claude-mod-keep-going = {
 };
 ```
 
-The module puts the mod's store path in `CLAUDE_CODE_PLUGIN_DIRS` and writes
-`settings` to the config file below.
+Both modules put the mod's store path in `CLAUDE_CODE_PLUGIN_DIRS` and write
+`settings` to the config file below. The home-manager module also merges that
+path into the `env` block of `~/.claude/settings.json`, which every Claude Code
+session reads however it was started; a session variable only reaches shells
+started after the next login. Turn that off with `pluginDirsInSettings = false`.
 
 ## What it does
 
@@ -49,16 +52,29 @@ The module puts the mod's store path in `CLAUDE_CODE_PLUGIN_DIRS` and writes
 reports. Failing that, it reads the time off the message (time zones and DST
 included), and failing that it waits `fallbackWaitHours`.
 
-Claude Code can continue on its own after a limit. With `native.usageLimit:
-"defer"` (the default), keep-going gives it `native.graceSeconds` past the reset
-before it sends anything. Before sending, it checks that the API answers, for
-up to `networkCheck.maxWaitMinutes`, so a laptop that just woke up doesn't burn
-a retry. It stops after `maxRetries` continues that hit the limit again.
+Claude Code can continue on its own after a limit, but not always: it won't
+when the reset is more than a day out (most weekly limits), after repeated
+hits, or when it was turned off or cancelled. keep-going reads its notices
+("continuing automatically at 9:42am", "will not resume on its own"). With
+`native.usageLimit: "defer"` (the default), it gives Claude Code
+`native.graceSeconds` past the reset while it says it will continue, and sends
+at the reset when it says it won't. Before sending, it checks that the API
+answers, for up to `networkCheck.maxWaitMinutes`, so a laptop that just woke up
+doesn't burn a retry. It stops after `maxRetries` continues that hit the limit
+again.
+
+When Claude Code can't continue on its own it opens the `/rate-limit-options`
+menu, whose first option can be a paid one. keep-going answers it the way
+"Stop and wait for limit to reset" would, and waits. A `/rate-limit-options`
+you type yourself still opens it; `native.rateLimitMenu: "show"` lets every one
+through.
 
 **One-model limits** (opt-in). On "You've hit your Opus limit", it sends that
 model's requests to the one `modelFallback.map` names until the limit resets,
 then lets them go back. It rewrites each request, for subagents too, and leaves
-`/model` and your saved default alone.
+`/model` and your saved default alone. An alias like `sonnet` resolves to the id
+that family last answered with; if the fallback model doesn't answer at all, it
+waits for the original limit instead.
 
 **API errors.** A 529, a 5xx or the API-level 429 ("Server is temporarily
 limiting requests") gets retried on an exponential schedule with full jitter, up
@@ -88,10 +104,29 @@ session `compact.settle.marginSeconds` before the cache expires, when:
   and `compact.trigger` is `policy` or `both`
 - Claude's last message mentions `/compact`, with `compact.matchLastMessage`
 
-It waits for running subagents first unless `compact.waitForAgents` is false,
-and can be limited to a time window (`compact.window`) or to sessions nobody
-has typed in for `compact.awayMinutes`. Compacting never touches what you have
-typed in the prompt box.
+It waits for running subagents, scheduled wakeups (`/loop`, ScheduleWakeup),
+crons and workflows first unless `compact.waitForAgents` is false, and can be
+limited to a time window (`compact.window`) or to sessions nobody has typed in
+for `compact.awayMinutes`. Compacting never touches what you have typed in the
+prompt box.
+
+No mod event carries the prompt cache's expiry, so keep-going estimates it from
+the end of the last turn and the cache TTL (`compact.cacheTtlMinutes`, or 60
+minutes on a subscription and 5 on an API key), and treats a model switch since
+then as a cold cache. For the exact time, have your statusline command save its
+input, which carries `prompt_cache.expires_at`:
+
+```bash
+input=$(cat)
+sid=$(jq -r .session_id <<<"$input")
+dir="${XDG_RUNTIME_DIR:-/tmp}/claude-keep-going/statusline"
+mkdir -p "$dir" && printf '%s' "$input" > "$dir/$sid.json"
+```
+
+**Print runs.** `claude -p` ends with its one result, so nothing could continue
+it afterwards. In a print run keep-going sends a request that failed before any
+of its answer arrived again, inside the run: after the reset for a usage limit,
+on the overload schedule otherwise, for up to `print.maxWaitHours`.
 
 ## Seeing what it does
 
@@ -114,7 +149,9 @@ badge=$(cat "${XDG_RUNTIME_DIR:-/tmp}/claude-keep-going/badge/$sid" 2>/dev/null)
 ```
 
 What it does shows up in the transcript as dim lines, and every decision goes to
-`$XDG_STATE_HOME/claude-keep-going/logs/mod-<date>-<session>.log`.
+`$XDG_STATE_HOME/claude-keep-going/logs/mod-<date>-<session>.log`. With
+`debug.dumpEvents`, the payloads of the events it acts on go next to it, in
+`.events.jsonl`.
 
 `/keep-going` takes these:
 
@@ -145,7 +182,9 @@ fallback and the band above the prompt.
   "fallbackWaitHours": 5,
   "retryMessage": "Continue where you left off. The previous attempt was rate limited.",
   "customPatterns": [],            // extra regexes that mark an error as a usage limit
-  "native": { "usageLimit": "defer", "graceSeconds": 180 },
+  "native": { "usageLimit": "defer", "graceSeconds": 180, "rateLimitMenu": "skip" },
+  "print": { "enabled": true, "maxWaitHours": 6 },
+  "debug": { "dumpEvents": false },
   "networkCheck": { "enabled": true, "url": "https://api.anthropic.com/", "maxWaitMinutes": 10 },
   "overload": {
     "enabled": true,
@@ -183,8 +222,6 @@ fallback and the band above the prompt.
 - **Keep the process alive.** A mod lives inside Claude Code, so it stops when
   Claude Code exits. To survive a dropped SSH session or a closed terminal, run
   Claude Code in tmux or screen.
-- **`claude -p`.** A print-mode run ends after one result, so there is nothing
-  to continue.
 - **Sessions where mods are off**: `--safe-mode`, `disableAllHooks`, or an
   organization that allows managed mods only.
 
