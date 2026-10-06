@@ -82,6 +82,7 @@ export function freshCore(): KeepGoingCore {
       lastEditAt: 0,
     },
     scheduled: { recurringCrons: 0, oneShotCrons: 0, wakeUntil: 0, workflows: 0 },
+    models: {},
     isPaused: false,
     cacheTtlMs: null,
   }
@@ -154,9 +155,12 @@ export class Keeper {
         ...held,
         activity: { ...fresh.activity, ...held.activity },
         scheduled: { ...fresh.scheduled, ...held.scheduled },
+        models: { ...held.models },
       }
       return
     }
+    const models = await this.io.storeGet('models')
+    if (typeof models === 'object' && models !== null) this.core.models = { ...(models as Record<string, string>) }
     const saved = await this.io.storeGet(`session:${sessionId}`)
     if (typeof saved !== 'object' || saved === null) return
     const { savedAt, usage, fallback } = saved as Partial<{ savedAt: number; usage: KeepGoingCore['usage']; fallback: KeepGoingCore['fallback'] }>
@@ -410,8 +414,8 @@ export class Keeper {
     const resetAt = parsed !== null
       ? now + calculateWaitMs(parsed, this.config.marginSeconds, this.config.fallbackWaitHours, new Date(now))
       : now + this.config.fallbackWaitHours * 3600_000
-    const to = modelIdOf(alias)
-    this.core.fallback = { from: model, to, original: await this.io.model(), resetAt, phase: 'switch' }
+    const to = this.core.models[alias.toLowerCase()] ?? modelIdOf(alias)
+    this.core.fallback = { from: model, to, original: await this.io.model(), resetAt, phase: 'switch', banner }
     this.core.retry = null
     this.log.notice(`${model} limit: sending its requests to ${to} until ${clockOf(resetAt)}`)
     return true
@@ -511,6 +515,23 @@ export class Keeper {
   pendingSchedules(now: number): number {
     const s = this.core.scheduled
     return s.recurringCrons + s.oneShotCrons + s.workflows + (s.wakeUntil > now ? 1 : 0)
+  }
+
+  /** A model id that answered, so an alias in modelFallback.map can name it. */
+  learnModel(id: string): void {
+    const family = /^claude-([a-z]+)-/.exec(id)?.[1]
+    if (family === undefined || this.core.models[family] === id) return
+    this.core.models[family] = id
+    void this.io.storeSet('models', this.core.models).catch(() => {})
+  }
+
+  /** A request sent to the fallback model got no answer: stop sending it there. */
+  onFallbackFailed(): void {
+    const f = this.core.fallback
+    if (f === null) return
+    this.log.notice(`${f.to} did not answer, waiting for the ${f.from} limit instead`)
+    this.core.fallback = null
+    void this.io.now().then((now) => this.enterUsageWait(f.banner, now))
   }
 
   onWrapUpNotice(now: number): void {

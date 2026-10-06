@@ -224,7 +224,17 @@ export const register: Register = (on, options) => {
 
   on('turn.step', async function* ($, e, next) {
     const model = keeper.stepModel(e.model, Date.now())
-    return yield* next(model === null ? e : { ...e, model })
+    const sent = model === null ? e : { ...e, model }
+    const stream = next(sent)
+    let step = await stream.next()
+    while (step.done !== true) {
+      yield step.value
+      step = await stream.next()
+    }
+    const result = step.value
+    if (result.usage !== null) keeper.learnModel(result.usage.model)
+    if (model !== null && result.usage === null && result.stopReason === null) keeper.onFallbackFailed()
+    return result
   })
 
   on('session.measure', async ($, e, next) => {

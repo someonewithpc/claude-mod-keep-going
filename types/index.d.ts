@@ -39,6 +39,7 @@ export type KeepGoingFallback = {
   original: string
   resetAt: number
   phase: 'switch' | 'continue' | 'active' | 'restore'
+  banner: string
 }
 
 export type KeepGoingCompact = {
@@ -81,6 +82,8 @@ export type KeepGoingCore = {
   compact: KeepGoingCompact
   activity: KeepGoingActivity
   scheduled: KeepGoingScheduled
+  /** Full model ids seen answering, by family (opus, sonnet, ...). */
+  models: Record<string, string>
   isPaused: boolean
   cacheTtlMs: number | null
 }

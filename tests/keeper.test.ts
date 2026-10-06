@@ -397,6 +397,24 @@ describe('compaction waits', () => {
 })
 
 describe('model fallback', () => {
+  test('sends to the model id it saw answer for that alias', async () => {
+    const f = fakeOf({ modelFallback: { enabled: true, map: { Opus: 'sonnet' } } })
+    f.keeper.learnModel('claude-sonnet-6-0')
+    await f.keeper.onTurnStart()
+    await f.keeper.onStopFailure('rate_limit', "You've hit your Opus limit · resets 3pm (UTC)")
+    expect(f.keeper.stepModel('claude-opus-5-5', f.clock.now)).toBe('claude-sonnet-6-0')
+  })
+
+  test('a fallback model that does not answer turns into a wait', async () => {
+    const f = fakeOf({ modelFallback: { enabled: true, map: { Opus: 'sonnet' } } })
+    await f.keeper.onTurnStart()
+    await f.keeper.onStopFailure('rate_limit', "You've hit your Opus limit · resets 3pm (UTC)")
+    f.keeper.onFallbackFailed()
+    await f.advance(0)
+    expect(f.keeper.core.fallback).toBe(null)
+    expect(f.keeper.core.usage?.until).toBe(Date.UTC(2026, 9, 6, 15, 1))
+  })
+
   test("sends one model's requests elsewhere until its reset, without /model", async () => {
     const f = fakeOf({ modelFallback: { enabled: true, map: { Opus: 'sonnet' } } })
     await f.keeper.onTurnStart()
