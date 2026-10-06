@@ -282,6 +282,18 @@ describe('compaction', () => {
     expect(f.compacted).toEqual([''])
   })
 
+  test('a new turn takes the pending compaction off the band and the badge', async () => {
+    const f = fakeOf(POLICY)
+    f.context = { percent: 30, tokens: 150_000, isSubscription: true }
+    await turn(f, 'answer')
+    f.keeper.onStop(1, 0)
+    await f.advance(10 * MIN)
+    expect(f.keeper.core.compact.scheduledFor).not.toBe(0)
+    await f.keeper.onTurnStart()
+    expect(f.keeper.core.compact.scheduledFor).toBe(0)
+    expect(f.badges.at(-1)).toBe('🟢KG')
+  })
+
   test('a small context is left alone', async () => {
     const f = fakeOf(POLICY)
     f.context = { percent: 10, tokens: 20_000, isSubscription: true }

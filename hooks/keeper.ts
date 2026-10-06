@@ -188,6 +188,7 @@ export class Keeper {
     const a = this.core.activity
     a.isBusy = true
     a.turnStartedAt = await this.io.now()
+    this.core.compact.scheduledFor = 0
     if (this.core.usage !== null) this.core.usage.submittedAt = 0
     await this.save()
   }
