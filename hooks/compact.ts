@@ -20,6 +20,8 @@ export type CompactInputs = {
   context: { percent: number | null; tokens: number | null }
   lastUserAt: number
   cacheTtlMs: number
+  /** The statusline's expiry for this idle period (0 when it says the cache is cold); null to estimate from the TTL. */
+  cacheExpiresAt: number | null
 }
 
 export type CompactTriggerKind = 'request' | 'policy' | 'last-message'
@@ -85,7 +87,7 @@ export function decideCompact(c: Config['compact'], i: CompactInputs): CompactDe
   if (!inWindow(c.window, new Date(i.now))) return { action: 'none' }
   if (c.awayMinutes !== null && i.now - i.lastUserAt < c.awayMinutes * 60_000) return { action: 'none' }
 
-  const expiresAt = i.idleSince + i.cacheTtlMs
+  const expiresAt = i.cacheExpiresAt ?? i.idleSince + i.cacheTtlMs
   if (i.now >= expiresAt) return { action: 'cold' }
 
   const fireAt = c.settle.mode === 'before-expiry'

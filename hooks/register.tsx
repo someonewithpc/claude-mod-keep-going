@@ -41,6 +41,7 @@ export const register: Register = (on, options) => {
   let uiLog: ((text: string, toTranscript: boolean) => void) | null = null
   let flushLog: () => Promise<void> = async () => {}
   let badgePath = ''
+  let statuslinePath = ''
 
   const write = (level: string, line: string, toTranscript: boolean) => {
     const d = new Date()
@@ -98,6 +99,17 @@ export const register: Register = (on, options) => {
         const last = (await $.session.messages()).at(-1)
         return last?.role === 'assistant' ? last.text : ''
       },
+      cacheExpiresAt: async () => {
+        const saved = parsed(await $.fs.read(statuslinePath).catch(() => '')) as
+          | { prompt_cache?: { expires_at?: unknown; warm?: unknown } }
+          | null
+        const cache = saved?.prompt_cache
+        if (cache === undefined) return null
+        return {
+          expiresAt: typeof cache.expires_at === 'number' ? cache.expires_at * 1000 : null,
+          isWarm: cache.warm !== false,
+        }
+      },
       busyAgents: async () => (await $.agent.list())
         .filter((agent) => agent.status === 'pending' || agent.status === 'running').length,
       submit: async (text) => {
@@ -131,6 +143,7 @@ export const register: Register = (on, options) => {
     const day = new Date().toISOString().slice(0, 10)
     logPath = `${stateHome}/claude-keep-going/logs/mod-${day}-${sessionId.slice(0, 8)}.log`
     badgePath = `${runtimeDir}/claude-keep-going/badge/${sessionId}`
+    statuslinePath = `${runtimeDir}/claude-keep-going/statusline/${sessionId}.json`
     await keeper.restore(sessionId)
 
     try {

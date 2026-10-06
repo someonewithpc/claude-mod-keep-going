@@ -27,6 +27,12 @@ export type Io = {
   context: () => Promise<{ percent: number | null; tokens: number | null; isSubscription: boolean }>
   model: () => Promise<string>
   lastAssistantText: () => Promise<string>
+  /**
+   * When the prompt cache expires, from the statusline input a statusline
+   * script saved for this session; null when there is none. The mod API
+   * carries no cache state, the statusline input does.
+   */
+  cacheExpiresAt: () => Promise<{ expiresAt: number | null; isWarm: boolean } | null>
   /** Subagents still working: pending or running, not a teammate sitting idle. */
   busyAgents: () => Promise<number>
   submit: (text: string) => Promise<void>
@@ -72,6 +78,7 @@ export function freshCore(): KeepGoingCore {
       permissionAt: 0,
       lastAnswer: '',
       failureTurnStartedAt: -1,
+      idleModel: '',
       lastEditAt: 0,
     },
     scheduled: { recurringCrons: 0, oneShotCrons: 0, wakeUntil: 0, workflows: 0 },
@@ -187,6 +194,7 @@ export class Keeper {
     a.isBusy = false
     a.idleSince = now
     a.lastAnswer = answer
+    a.idleModel = await this.io.model().catch(() => '')
     if (reason === 'aborted') a.lastUserAt = now
 
     if (reason === 'answer') {
@@ -648,10 +656,17 @@ export class Keeper {
       context: { percent: context.percent, tokens: context.tokens },
       lastUserAt: a.lastUserAt,
       cacheTtlMs: this.cacheTtlMs(context.isSubscription),
+      cacheExpiresAt: await this.cacheExpiry(),
     })
 
     if (decision.action === 'none') {
       c.scheduledFor = 0
+      return
+    }
+    if (decision.action !== 'cold' && a.idleModel !== '' && (await this.io.model().catch(() => a.idleModel)) !== a.idleModel) {
+      c.handledIdleSince = a.idleSince
+      c.scheduledFor = 0
+      this.log.info('compaction skipped: the model changed since the last turn, so its cache is cold (compact-skipped-cold)')
       return
     }
     if (decision.action === 'cold') {
@@ -685,6 +700,15 @@ export class Keeper {
     } catch (error) {
       this.log.warn(`compaction failed: ${error instanceof Error ? error.message : String(error)}`)
     }
+  }
+
+  /** The statusline's expiry when one was saved after the last turn ended; null to estimate. */
+  private async cacheExpiry(): Promise<number | null> {
+    const saved = await this.io.cacheExpiresAt().catch(() => null)
+    if (saved === null) return null
+    if (!saved.isWarm) return 0
+    if (saved.expiresAt === null || saved.expiresAt < this.core.activity.idleSince) return null
+    return saved.expiresAt
   }
 
   cacheTtlMs(isSubscription: boolean): number {

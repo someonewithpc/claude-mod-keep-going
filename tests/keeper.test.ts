@@ -358,6 +358,33 @@ describe('compaction waits', () => {
     expect(f.compacted).toEqual([''])
   })
 
+  test('uses the expiry the statusline saved', async () => {
+    const f = fakeOf(POLICY)
+    f.context = { percent: 30, tokens: 150_000, isSubscription: true }
+    await turn(f, 'answer')
+    f.cache = { expiresAt: f.clock.now + 20 * MIN, isWarm: true }
+    await f.advance(14 * MIN)
+    expect(f.compacted).toEqual([])
+    await f.advance(MIN)
+    expect(f.compacted).toEqual([''])
+  })
+
+  test('skips a cache the statusline says is cold, or one a model switch made cold', async () => {
+    const f = fakeOf(POLICY)
+    f.context = { percent: 30, tokens: 150_000, isSubscription: true }
+    await turn(f, 'answer')
+    f.cache = { expiresAt: null, isWarm: false }
+    await f.advance(56 * MIN)
+    expect(f.compacted).toEqual([])
+
+    const g = fakeOf(POLICY)
+    g.context = { percent: 30, tokens: 150_000, isSubscription: true }
+    await turn(g, 'answer')
+    g.model = 'claude-sonnet-5-5'
+    await g.advance(56 * MIN)
+    expect(g.compacted).toEqual([])
+  })
+
   test('away means no typing in the prompt box', async () => {
     const f = fakeOf({ compact: { ...POLICY.compact, awayMinutes: 30 } })
     f.context = { percent: 30, tokens: 150_000, isSubscription: true }

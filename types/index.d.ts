@@ -60,6 +60,8 @@ export type KeepGoingActivity = {
   permissionAt: number
   lastAnswer: string
   failureTurnStartedAt: number
+  /** The model the session was on when it went idle; another one now means a cold cache. */
+  idleModel: string
   lastEditAt: number
 }
 
