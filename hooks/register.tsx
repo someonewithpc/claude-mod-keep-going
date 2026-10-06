@@ -225,7 +225,7 @@ export const register: Register = (on, options) => {
   })
 
   on('prompt.edit', async ($, e, next) => {
-    if (keeper.config.compact.awayMinutes !== null) keeper.core.activity.lastUserAt = await $.clock.now()
+    keeper.onEdit(await $.clock.now())
     return next(e)
   })
 

@@ -301,6 +301,20 @@ describe('compaction', () => {
   })
 })
 
+describe('compaction waits', () => {
+  const POLICY = { compact: { enabled: true, trigger: 'policy', minContextPercent: 0, waitForAgents: true } }
+
+  test('away means no typing in the prompt box', async () => {
+    const f = fakeOf({ compact: { ...POLICY.compact, awayMinutes: 30 } })
+    f.context = { percent: 30, tokens: 150_000, isSubscription: true }
+    await turn(f, 'answer')
+    await f.advance(50 * MIN)
+    f.keeper.onEdit(f.clock.now)
+    await f.advance(6 * MIN)
+    expect(f.compacted).toEqual([])
+  })
+})
+
 describe('model fallback', () => {
   test("sends one model's requests elsewhere until its reset, without /model", async () => {
     const f = fakeOf({ modelFallback: { enabled: true, map: { Opus: 'sonnet' } } })

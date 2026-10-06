@@ -54,6 +54,7 @@ export type KeepGoingActivity = {
   permissionAt: number
   lastAnswer: string
   failureTurnStartedAt: number
+  lastEditAt: number
 }
 
 export type KeepGoingCore = {

@@ -72,6 +72,7 @@ export function freshCore(): KeepGoingCore {
       permissionAt: 0,
       lastAnswer: '',
       failureTurnStartedAt: -1,
+      lastEditAt: 0,
     },
     isPaused: false,
     cacheTtlMs: null,
@@ -137,7 +138,12 @@ export class Keeper {
     this.sessionId = sessionId
     const held = await this.io.loadCore()
     if (held) {
-      this.core = { ...freshCore(), ...held }
+      const fresh = freshCore()
+      this.core = {
+        ...fresh,
+        ...held,
+        activity: { ...fresh.activity, ...held.activity },
+      }
       return
     }
     const saved = await this.io.storeGet(`session:${sessionId}`)
@@ -177,6 +183,7 @@ export class Keeper {
     a.isBusy = false
     a.idleSince = now
     a.lastAnswer = answer
+    if (reason === 'aborted') a.lastUserAt = now
 
     if (reason === 'answer') {
       this.onAnswered(now)
@@ -433,6 +440,11 @@ export class Keeper {
     }
     this.core.wrapUp.dueAt = 0
     await this.save()
+  }
+
+  onEdit(now: number): void {
+    this.core.activity.lastUserAt = now
+    this.core.activity.lastEditAt = now
   }
 
   onWrapUpNotice(now: number): void {
