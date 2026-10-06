@@ -174,3 +174,27 @@ describe('the usage-limit menu', () => {
     expect(shown).toBe(1)
   })
 })
+
+describe('a print run', () => {
+  test('sends a request that failed before any answer again', async ($, on) => {
+    const world = worldOf(on, {}, false)
+    on('process.run', () => ({ value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
+    let sent = 0
+    on('turn.step', async function* ($, e) {
+      sent += 1
+      if (sent === 1) return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: null, usage: null }
+      return {
+        turnId: e.turnId, index: e.index, answer: 'ok', toolUses: [], stopReason: 'end_turn',
+        usage: { input_tokens: 1, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, model: 'claude-haiku-4-5-20251001' },
+      }
+    })
+    await $.session.start({ cwd: '/repo', surface: null, isInteractive: false })
+    const stream = $.turn.step({ turnId: 't1', index: 0, model: 'claude-haiku-4-5-20251001', messageCount: 1 })
+    let step = await stream.next()
+    while (step.done !== true) step = await stream.next()
+    const result = step.value
+    expect(sent).toBe(2)
+    expect(result.stopReason).toBe('end_turn')
+    void world
+  })
+})

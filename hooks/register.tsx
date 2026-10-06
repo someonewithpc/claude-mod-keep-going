@@ -1,6 +1,7 @@
 import { read } from 'claude-code'
-import type { Register } from 'claude-code'
+import type { Register, TurnStepChunk } from 'claude-code'
 
+import { overloadWaitMs } from './backoff'
 import { applyOptions, mergeFiles, validate } from './config'
 import { backgroundOf, isPersonPrompt, Keeper } from './keeper'
 
@@ -42,6 +43,7 @@ export const register: Register = (on, options) => {
   let flushLog: () => Promise<void> = async () => {}
   let badgePath = ''
   let statuslinePath = ''
+  let isPrintRun = false
 
   const write = (level: string, line: string, toTranscript: boolean) => {
     const d = new Date()
@@ -132,6 +134,7 @@ export const register: Register = (on, options) => {
     const configDirs = ((await $.env.get('XDG_CONFIG_DIRS')) || '/etc/xdg').split(':').filter(Boolean)
     const stateHome = (await $.env.get('XDG_STATE_HOME')) || `${home}/.local/state`
     const runtimeDir = (await $.env.get('XDG_RUNTIME_DIR')) || '/tmp'
+    isPrintRun = !e.isInteractive && e.surface === null
 
     const files = []
     for (const path of [...[...configDirs].reverse().map((dir) => `${dir}/claude-keep-going/config.json`), `${configHome}/claude-keep-going/config.json`]) {
@@ -225,16 +228,53 @@ export const register: Register = (on, options) => {
   on('turn.step', async function* ($, e, next) {
     const model = keeper.stepModel(e.model, Date.now())
     const sent = model === null ? e : { ...e, model }
-    const stream = next(sent)
-    let step = await stream.next()
-    while (step.done !== true) {
-      yield step.value
-      step = await stream.next()
+    const isRetried = isPrintRun && keeper.config.print.enabled && e.agentId === undefined
+    const deadline = Date.now() + keeper.config.print.maxWaitHours * 3600_000
+
+    // A print run ends with its one result, so nothing could continue it
+    // afterwards: a request that failed before any of its answer arrived is
+    // sent again here, after the wait a session would have done.
+    for (let attempt = 0; ; attempt++) {
+      const stream = next(sent)
+      let chunks = 0
+      const held: TurnStepChunk[] = []
+      let step = await stream.next()
+      while (step.done !== true) {
+        const chunk = step.value
+        if (isRetried && chunks === 0 && chunk.kind === 'engine') {
+          held.push(chunk)
+        } else {
+          chunks += 1
+          for (const before of held.splice(0)) yield before
+          yield chunk
+        }
+        step = await stream.next()
+      }
+      const result = step.value
+      if (result.usage !== null) keeper.learnModel(result.usage.model)
+      const isFailed = result.usage === null && result.stopReason === null
+      if (isFailed && model !== null) keeper.onFallbackFailed()
+      if (!isFailed || !isRetried || chunks > 0 || attempt >= keeper.config.maxRetries) {
+        for (const before of held) yield before
+        return result
+      }
+
+      const { rateLimits } = await $.session.usage()
+      const reset = rateLimits
+        .filter((w) => w.percentUsed >= 100 && w.resetsAt !== undefined)
+        .map((w) => Date.parse(w.resetsAt ?? ''))
+        .filter((t) => Number.isFinite(t))
+      const waitMs = reset.length > 0
+        ? Math.max(...reset) - Date.now() + keeper.config.marginSeconds * 1000
+        : overloadWaitMs(attempt, keeper.config.overload, Math.random)
+      if (Date.now() + waitMs > deadline) return result
+      write('INFO', `print run: request failed, sending it again in ${Math.round(waitMs / 1000)}s`, false)
+      await flushLog()
+      for (let left = Math.max(0, waitMs); left > 0; left -= 590_000) {
+        const seconds = Math.ceil(Math.min(left, 590_000) / 1000)
+        await $.process.run(['sleep', String(seconds)], { timeoutMs: (seconds + 10) * 1000 })
+      }
     }
-    const result = step.value
-    if (result.usage !== null) keeper.learnModel(result.usage.model)
-    if (model !== null && result.usage === null && result.stopReason === null) keeper.onFallbackFailed()
-    return result
   })
 
   on('session.measure', async ($, e, next) => {
