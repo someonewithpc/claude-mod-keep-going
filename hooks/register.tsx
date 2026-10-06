@@ -44,6 +44,13 @@ export const register: Register = (on, options) => {
   let badgePath = ''
   let statuslinePath = ''
   let isPrintRun = false
+  const events: string[] = []
+
+  const dump = (event: string, e: unknown) => {
+    if (!keeper.config.debug.dumpEvents) return
+    events.push(JSON.stringify({ at: new Date().toISOString(), event, e }).slice(0, 8000))
+    isLogDirty = true
+  }
 
   const write = (level: string, line: string, toTranscript: boolean) => {
     const d = new Date()
@@ -70,6 +77,7 @@ export const register: Register = (on, options) => {
       isLogDirty = false
       try {
         await $.fs.write(logPath, `${lines.join('\n')}\n`)
+        if (events.length > 0) await $.fs.write(logPath.replace(/\.log$/, '.events.jsonl'), `${events.join('\n')}\n`)
       } catch {
         isLogDirty = true
       }
@@ -135,6 +143,7 @@ export const register: Register = (on, options) => {
     const stateHome = (await $.env.get('XDG_STATE_HOME')) || `${home}/.local/state`
     const runtimeDir = (await $.env.get('XDG_RUNTIME_DIR')) || '/tmp'
     isPrintRun = !e.isInteractive && e.surface === null
+    dump('session.start', e)
 
     const files = []
     for (const path of [...[...configDirs].reverse().map((dir) => `${dir}/claude-keep-going/config.json`), `${configHome}/claude-keep-going/config.json`]) {
@@ -251,6 +260,7 @@ export const register: Register = (on, options) => {
         step = await stream.next()
       }
       const result = step.value
+      dump('turn.step', { chunks, held: held.length, isRetried, result })
       if (result.usage !== null) keeper.learnModel(result.usage.model)
       const isFailed = result.usage === null && result.stopReason === null
       if (isFailed && model !== null) keeper.onFallbackFailed()
@@ -283,6 +293,7 @@ export const register: Register = (on, options) => {
   })
 
   on('prompt.submit', async ($, e, next) => {
+    dump('prompt.submit', { origin: e.origin, text: e.text.slice(0, 300) })
     if (isPersonPrompt(e.origin.kind)) await keeper.onPersonPrompt()
     else keeper.onDelivered(e.origin.kind)
     return next(e)
@@ -297,12 +308,14 @@ export const register: Register = (on, options) => {
       : null
     if (!('deny' in called && called.deny !== undefined) && called.isError !== true) {
       keeper.onToolCall(await $.clock.now(), tool, e as unknown as Record<string, unknown>, result)
+      dump('tool.call', { tool, result })
     }
     return called
   })
 
   on('command.run', { command: 'rate-limit-options' }, async ($, e, next) => {
     const now = await $.clock.now()
+    dump('command.run', { command: e.command, origin: e.origin, lastEditAt: keeper.core.activity.lastEditAt, now })
     if (keeper.config.native.rateLimitMenu === 'show' || now - keeper.core.activity.lastEditAt < 10_000) return next(e)
     const { rateLimits } = await $.session.usage()
     const isLimited = keeper.core.usage !== null || rateLimits.some((w) => w.percentUsed >= 100)
@@ -329,7 +342,7 @@ export const register: Register = (on, options) => {
       const text = textOf((e.message as { content?: unknown }).content)
       const now = await $.clock.now()
       if (WRAP_UP.test(text)) keeper.onWrapUpNotice(now)
-      keeper.onNotice(now, text)
+      if (keeper.onNotice(now, text) || WRAP_UP.test(text)) dump('session.append', { door: e.door, message: e.message })
     }
     return next(e)
   })
