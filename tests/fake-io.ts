@@ -19,6 +19,7 @@ export type Fake = {
   isReachable: boolean
   model: string
   agents: number
+  lastText: string
   timers: { at: number; fn: () => void }[]
   advance: (ms: number) => Promise<void>
 }
@@ -51,6 +52,7 @@ export function fakeOf(raw: unknown = {}, now = Date.UTC(2026, 9, 6, 12, 0)): Fa
     isReachable: true,
     model: 'claude-opus-5-5',
     agents: 0,
+    lastText: '',
     timers: [],
     advance: async (ms) => {
       const to = fake.clock.now + ms
@@ -89,7 +91,7 @@ export function fakeOf(raw: unknown = {}, now = Date.UTC(2026, 9, 6, 12, 0)): Fa
     rateLimits: async () => fake.rateLimits,
     context: async () => fake.context,
     model: async () => fake.model,
-    lastAssistantText: async () => '',
+    lastAssistantText: async () => fake.lastText,
     busyAgents: async () => fake.agents,
     submit: async (text) => {
       fake.submitted.push(text)

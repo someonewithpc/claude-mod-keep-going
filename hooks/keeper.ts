@@ -233,11 +233,11 @@ export class Keeper {
    */
   private async classifyLate(turnStartedAt: number, answer: string): Promise<void> {
     if (this.core.activity.failureTurnStartedAt === turnStartedAt) return
-    let text = answer
-    if (text === '') {
-      text = await this.io.lastAssistantText()
-    }
-    const failure = classify(null, text, this.config.customPatterns)
+    // A response cut off partway ends the turn with the partial text as its
+    // answer; the error is the message after it.
+    const last = await this.io.lastAssistantText().catch(() => '')
+    const failure = classify(null, last, this.config.customPatterns) ?? classify(null, answer, this.config.customPatterns)
+    const text = last || answer
     if (failure === null) {
       this.log.info(`turn ended in an error that retrying won't fix: ${text.slice(0, 200)}`)
       return
