@@ -404,9 +404,10 @@ export const register: Register = (on, options) => {
     return (
       <Box flexDirection="row" columnGap={1}>
         <Text dimColor>keep-going: {view.line}</Text>
-        {view.actions.map((what) => (
-          <Button key={what} label={labels[what]} plain onPress={act(what)} />
-        ))}
+        {view.actions.flatMap((what, i) => [
+          ...(i > 0 ? [<Text key={`${what}-bar`} dimColor>|</Text>] : []),
+          <Button key={what} label={labels[what]} plain onPress={act(what)} />,
+        ])}
       </Box>
     )
   })
