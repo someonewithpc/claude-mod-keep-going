@@ -1,0 +1,38 @@
+{
+  "name": "keep-going",
+  "displayName": "Keep going",
+  "version": "0.1.0",
+  "description": "Keeps unattended sessions going: continues after usage limits reset, retries API overload with backoff, resumes cut-off responses, and compacts idle sessions before the prompt cache expires.",
+  "author": { "name": "Hugo Sales" },
+  "homepage": "https://github.com/someonewithpc/claude-mod-keep-going",
+  "repository": "https://github.com/someonewithpc/claude-mod-keep-going",
+  "license": "MIT",
+  "keywords": ["rate-limit", "usage-limit", "retry", "compact", "unattended"],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "compact": {
+      "type": "string",
+      "title": "Idle compaction",
+      "description": "\"config\" (default): what the config file says. \"off\": never. \"request\": when Claude or /keep-going compact asks. \"policy\": when the context is big. \"both\": either.",
+      "required": false,
+      "default": "config",
+      "options": ["config", "off", "request", "policy", "both"]
+    },
+    "modelFallback": {
+      "type": "string",
+      "title": "Model fallback",
+      "description": "On a limit scoped to one model (\"You've hit your Opus limit\"), switch to the model the config maps it to and back after the reset. \"config\" (default) follows the config file.",
+      "required": false,
+      "default": "config",
+      "options": ["config", "on", "off"]
+    },
+    "band": {
+      "type": "string",
+      "title": "Band above the prompt",
+      "description": "Show what is pending above the prompt, with buttons to continue now or cancel. \"config\" (default) follows the config file, which has it on.",
+      "required": false,
+      "default": "config",
+      "options": ["config", "on", "off"]
+    }
+  }
+}
