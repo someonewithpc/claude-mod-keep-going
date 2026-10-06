@@ -14,7 +14,7 @@ type World = {
 }
 
 /** The engine beneath the mod: a session on a mocked clock, every effect kept. */
-function worldOf(on: On, files: Record<string, string> = {}): World {
+function worldOf(on: On, files: Record<string, string> = {}, isLimited = true): World {
   const world: World = {
     submitted: [],
     compacted: [],
@@ -39,7 +39,7 @@ function worldOf(on: On, files: Record<string, string> = {}): World {
     value: {
       startedAt: NOW,
       context: { window: 1_000_000, tokens: 150_000, percent: 15 },
-      rateLimits: [{ kind: 'five_hour', percentUsed: 100, resetsAt: new Date(RESET).toISOString() }],
+      rateLimits: isLimited ? [{ kind: 'five_hour', percentUsed: 100, resetsAt: new Date(RESET).toISOString() }] : [],
     },
   }))
   on('fs.read', ($, e) => {
@@ -144,5 +144,33 @@ describe('through the engine', () => {
       expect(await ui.find({ key: 'continue' })).toBeDefined()
       await ui.unmount()
     }
+  })
+})
+
+describe('the usage-limit menu', () => {
+  test('is answered when Claude Code opens it on a limit', async ($, on) => {
+    const world = worldOf(on)
+    let shown = 0
+    on('command.run', { command: 'rate-limit-options' }, () => {
+      shown += 1
+      return { text: 'menu' }
+    })
+    await $.session.start(SESSION)
+    await world.clock.advance(60_000)
+    await $.command.run({ ...TYPED, command: 'rate-limit-options', args: '' })
+    expect(shown).toBe(0)
+  })
+
+  test('is shown when no limit is hit', async ($, on) => {
+    const world = worldOf(on, {}, false)
+    let shown = 0
+    on('command.run', { command: 'rate-limit-options' }, () => {
+      shown += 1
+      return { text: 'menu' }
+    })
+    await $.session.start(SESSION)
+    await world.clock.advance(60_000)
+    await $.command.run({ ...TYPED, command: 'rate-limit-options', args: '' })
+    expect(shown).toBe(1)
   })
 })

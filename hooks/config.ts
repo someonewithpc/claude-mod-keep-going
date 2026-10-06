@@ -35,7 +35,7 @@ export type Config = {
     minIntervalMinutes: number
     waitForAgents: boolean
   }
-  native: { usageLimit: 'defer' | 'ignore'; graceSeconds: number }
+  native: { usageLimit: 'defer' | 'ignore'; graceSeconds: number; rateLimitMenu: 'skip' | 'show' }
   networkCheck: { enabled: boolean; url: string; maxWaitMinutes: number }
   modelFallback: { enabled: boolean; map: Record<string, string>; switchBack: boolean }
   ui: { statusLine: 'active' | 'always' | 'off'; band: boolean }
@@ -82,7 +82,7 @@ export const DEFAULTS: Config = {
     minIntervalMinutes: 30,
     waitForAgents: true,
   },
-  native: { usageLimit: 'defer', graceSeconds: 180 },
+  native: { usageLimit: 'defer', graceSeconds: 180, rateLimitMenu: 'skip' },
   networkCheck: { enabled: true, url: 'https://api.anthropic.com/', maxWaitMinutes: 10 },
   modelFallback: { enabled: false, map: { Opus: 'sonnet' }, switchBack: true },
   ui: { statusLine: 'active', band: true },
@@ -196,6 +196,7 @@ export function validate(raw: unknown): Config {
     native: {
       usageLimit: oneOf(nw.usageLimit, ['defer', 'ignore'], d.native.usageLimit),
       graceSeconds: num(nw.graceSeconds, 0, d.native.graceSeconds),
+      rateLimitMenu: oneOf(nw.rateLimitMenu, ['skip', 'show'], d.native.rateLimitMenu),
     },
     networkCheck: {
       enabled: bool(nc.enabled, d.networkCheck.enabled),

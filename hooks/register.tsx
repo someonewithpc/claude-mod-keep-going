@@ -224,6 +224,19 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  on('command.run', { command: 'rate-limit-options' }, async ($, e, next) => {
+    const now = await $.clock.now()
+    if (keeper.config.native.rateLimitMenu === 'show' || now - keeper.core.activity.lastEditAt < 10_000) return next(e)
+    const { rateLimits } = await $.session.usage()
+    const isLimited = keeper.core.usage !== null || rateLimits.some((w) => w.percentUsed >= 100)
+    if (!isLimited) return next(e)
+    // Claude Code opens this menu itself when it cannot arm its own
+    // auto-continue. Its default may be a paid option; answering it here is
+    // what "Stop and wait for limit to reset" does, and the wait is ours.
+    write('INFO', 'answered the usage-limit menu Claude Code opened: waiting for the reset', true)
+    return {}
+  })
+
   on('prompt.edit', async ($, e, next) => {
     keeper.onEdit(await $.clock.now())
     return next(e)
