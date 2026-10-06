@@ -102,6 +102,17 @@ buttons to act now or cancel:
 keep-going: usage limit, continuing at 15:51 (in 1h20m)  Continue now  Cancel
 ```
 
+For a custom statusline, each session's badge is in
+`$XDG_RUNTIME_DIR/claude-keep-going/badge/<session_id>`: `🟢KG` while watching,
+`⏳KG 1h20m` during a usage wait, `🟠KG 45s` before an API-error retry, `🗜12m`
+added when a compaction is scheduled, `🔴KG` once it gave up. The statusline
+command gets `session_id` in its JSON input:
+
+```bash
+sid=$(jq -r .session_id <<<"$input")
+badge=$(cat "${XDG_RUNTIME_DIR:-/tmp}/claude-keep-going/badge/$sid" 2>/dev/null)
+```
+
 What it does shows up in the transcript as dim lines, and every decision goes to
 `$XDG_STATE_HOME/claude-keep-going/logs/mod-<date>-<session>.log`.
 
