@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'claude-code/testing'
 
-import { classify } from '../hooks/classify'
+import { classify, nativeNoticeOf } from '../hooks/classify'
 import { fakeOf, turn } from './fake-io'
 
 const MIN = 60_000
@@ -39,6 +39,35 @@ describe('classify', () => {
       .toMatchObject({ kind: 'safeguard' })
     expect(classify('authentication_failed', 'Not logged in · Please run /login')).toBe(null)
     expect(classify(null, 'I fixed the 529 handling in server.ts')).toBe(null)
+  })
+})
+
+describe('Claude Code auto-continue notices', () => {
+  test('are told apart by their words', () => {
+    expect(nativeNoticeOf('Usage limit reached · continuing automatically at 9:42am · esc to cancel')).toBe('armed')
+    expect(nativeNoticeOf('Usage limit reset · continuing automatically')).toBe('fired')
+    expect(nativeNoticeOf('Usage limit has reset · press enter to continue')).toBe('stale')
+    expect(nativeNoticeOf('Automatic continue was turned off · this task will not resume on its own')).toBe('disabled')
+    expect(nativeNoticeOf('Automatic continue stopped · the usage limit now resets more than 24 hours out, so this task will not resume on its own')).toBe('disabled')
+    expect(nativeNoticeOf('Compacted the conversation')).toBe(null)
+  })
+
+  test('one shown before the failure is classified still counts', async () => {
+    const f = fakeOf()
+    await f.keeper.onTurnStart()
+    f.keeper.onNotice(f.clock.now, 'Usage limit reached · continuing automatically at 2pm · esc to cancel')
+    await f.keeper.onStopFailure('rate_limit', "You've hit your session limit · resets 2pm (UTC)")
+    expect(f.keeper.core.usage?.nativeNotice).toBe('armed')
+  })
+
+  test('one that says it will not continue means no grace period', async () => {
+    const f = fakeOf({ networkCheck: { enabled: false } })
+    await f.keeper.onTurnStart()
+    await f.keeper.onStopFailure('rate_limit', "You've hit your weekly limit · resets 2pm (UTC)")
+    await f.keeper.onTurnComplete('error', '')
+    f.keeper.onNotice(f.clock.now, 'Automatic continue stopped · the usage limit now resets more than 24 hours out, so this task will not resume on its own')
+    await f.advance(2 * HOUR + MIN)
+    expect(f.submitted).toHaveLength(1)
   })
 })
 

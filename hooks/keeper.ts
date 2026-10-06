@@ -1,7 +1,7 @@
 import type { SessionRateLimit } from 'claude-code'
 
 import { overloadWaitMs, INCIDENT_GAP_MS } from './backoff'
-import { classify, type Failure } from './classify'
+import { classify, nativeNoticeOf, type Failure } from './classify'
 import { decideCompact } from './compact'
 import { DEFAULTS, type Config } from './config'
 import { parseResetTime, calculateWaitMs } from './lib/time-parser.js'
@@ -101,6 +101,8 @@ export class Keeper {
   private isTicking = false
   private lastView = ''
   private lastBadge = ''
+  /** The latest auto-continue notice, which can come before the failure is classified. */
+  private lastNative: { notice: NonNullable<KeepGoingCore['usage']>['nativeNotice']; at: number } | null = null
 
   io!: Io
 
@@ -327,6 +329,12 @@ export class Keeper {
         isGivenUp: false,
       }
     }
+    const native = this.lastNative
+    const wait = this.core.usage
+    if (wait !== null && native !== null && native.at >= this.core.activity.turnStartedAt && wait.nativeNotice === null) {
+      wait.nativeNotice = native.notice
+      wait.nativeNoticeAt = native.at
+    }
     const source = fromApi !== null ? 'the API' : parsed !== null ? 'the banner' : 'no reset time, the fallback wait'
     this.log.notice(`usage limit: continuing at ${clockOf(until)}, in ${durationOf(until - now)} (from ${source})`)
   }
@@ -440,6 +448,20 @@ export class Keeper {
     }
     this.core.wrapUp.dueAt = 0
     await this.save()
+  }
+
+  /** A notice row or line Claude Code showed; true when it was about its own auto-continue. */
+  onNotice(now: number, text: string): boolean {
+    const notice = nativeNoticeOf(text)
+    if (notice === null) return false
+    this.lastNative = { notice, at: now }
+    const u = this.core.usage
+    if (u !== null && u.nativeNotice !== notice) {
+      u.nativeNotice = notice
+      u.nativeNoticeAt = now
+      this.log.info(`Claude Code auto-continue: ${notice}`)
+    }
+    return true
   }
 
   onEdit(now: number): void {

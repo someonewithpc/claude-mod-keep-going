@@ -1,5 +1,11 @@
 export type KeepGoingRetryFamily = 'overload' | 'safeguard' | 'interrupted'
 
+/**
+ * What Claude Code's own auto-continue said about this limit: armed for the
+ * reset, fired, waiting for Enter (stale), or not going to continue.
+ */
+export type KeepGoingNativeNotice = 'armed' | 'fired' | 'stale' | 'disabled'
+
 export type KeepGoingUsageWait = {
   until: number
   enteredAt: number
@@ -7,7 +13,7 @@ export type KeepGoingUsageWait = {
   attempts: number
   banner: string
   submittedAt: number
-  nativeNotice: 'fired' | 'stale' | 'disabled' | null
+  nativeNotice: KeepGoingNativeNotice | null
   nativeNoticeAt: number
   hasLoggedGrace: boolean
   hasLoggedMissed: boolean

@@ -242,10 +242,17 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  on('ui.render', { component: 'InfoNotice' }, async ($, e, next) => {
+    keeper.onNotice(await $.clock.now(), e.props.text)
+    return next(e)
+  })
+
   on('session.append', async ($, e, next) => {
     if (e.agentId === undefined && e.door !== 'response' && e.door !== 'tool-result' && e.door !== 'prompt') {
-      const content = (e.message as { content?: unknown }).content
-      if (WRAP_UP.test(textOf(content))) keeper.onWrapUpNotice(await $.clock.now())
+      const text = textOf((e.message as { content?: unknown }).content)
+      const now = await $.clock.now()
+      if (WRAP_UP.test(text)) keeper.onWrapUpNotice(now)
+      keeper.onNotice(now, text)
     }
     return next(e)
   })

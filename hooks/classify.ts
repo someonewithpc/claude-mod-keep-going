@@ -56,3 +56,19 @@ export function classify(error: string | null, text: string, customPatterns: rea
   }
   return null
 }
+
+/**
+ * What a notice of Claude Code's own auto-continue says, from its text:
+ * "Usage limit reached · continuing automatically at 9:42am", "Usage limit
+ * reset · continuing automatically", "Usage limit has reset · press enter to
+ * continue", "Automatic continue was turned off · this task will not resume
+ * on its own", and the variants for a reset more than a day out or repeated
+ * hits. Null for any other text.
+ */
+export function nativeNoticeOf(text: string): 'armed' | 'fired' | 'stale' | 'disabled' | null {
+  if (/will not resume on its own|Automatic continue (?:cancelled|stopped|was turned off)/i.test(text)) return 'disabled'
+  if (/press enter to continue/i.test(text) && /usage limit/i.test(text)) return 'stale'
+  if (/Usage limit (?:reset|available again)[^\n]*continuing (?:automatically|now)/i.test(text)) return 'fired'
+  if (/continuing automatically (?:at|in|shortly)/i.test(text)) return 'armed'
+  return null
+}
