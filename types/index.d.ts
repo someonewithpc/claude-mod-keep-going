@@ -63,6 +63,14 @@ export type KeepGoingActivity = {
   lastEditAt: number
 }
 
+/** Scheduled work the session is waiting on, from the tool calls that set it up. */
+export type KeepGoingScheduled = {
+  recurringCrons: number
+  oneShotCrons: number
+  wakeUntil: number
+  workflows: number
+}
+
 export type KeepGoingCore = {
   usage: KeepGoingUsageWait | null
   retry: KeepGoingRetry | null
@@ -70,6 +78,7 @@ export type KeepGoingCore = {
   wrapUp: { noticeAt: number; dueAt: number; nudges: number }
   compact: KeepGoingCompact
   activity: KeepGoingActivity
+  scheduled: KeepGoingScheduled
   isPaused: boolean
   cacheTtlMs: number | null
 }

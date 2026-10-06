@@ -333,6 +333,31 @@ describe('compaction', () => {
 describe('compaction waits', () => {
   const POLICY = { compact: { enabled: true, trigger: 'policy', minContextPercent: 0, waitForAgents: true } }
 
+  test('for a scheduled wakeup, and goes ahead once it has fired', async () => {
+    const f = fakeOf(POLICY)
+    f.context = { percent: 30, tokens: 150_000, isSubscription: true }
+    f.keeper.onToolCall(f.clock.now, 'ScheduleWakeup', { delaySeconds: 3600 }, null)
+    await turn(f, 'answer')
+    await f.advance(56 * MIN)
+    expect(f.compacted).toEqual([])
+    await turn(f, 'answer')
+    await f.advance(56 * MIN)
+    expect(f.compacted).toEqual([''])
+  })
+
+  test('for a recurring cron until it is deleted', async () => {
+    const f = fakeOf(POLICY)
+    f.context = { percent: 30, tokens: 150_000, isSubscription: true }
+    f.keeper.onToolCall(f.clock.now, 'CronCreate', { cron: '*/5 * * * *', prompt: 'x' }, { id: 'a', recurring: true })
+    await turn(f, 'answer')
+    await f.advance(56 * MIN)
+    expect(f.compacted).toEqual([])
+    f.keeper.onToolCall(f.clock.now, 'CronDelete', { id: 'a' }, null)
+    await turn(f, 'answer')
+    await f.advance(56 * MIN)
+    expect(f.compacted).toEqual([''])
+  })
+
   test('away means no typing in the prompt box', async () => {
     const f = fakeOf({ compact: { ...POLICY.compact, awayMinutes: 30 } })
     f.context = { percent: 30, tokens: 150_000, isSubscription: true }

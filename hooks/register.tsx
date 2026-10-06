@@ -221,7 +221,21 @@ export const register: Register = (on, options) => {
 
   on('prompt.submit', async ($, e, next) => {
     if (isPersonPrompt(e.origin.kind)) await keeper.onPersonPrompt()
+    else keeper.onDelivered(e.origin.kind)
     return next(e)
+  })
+
+  on('tool.call', async ($, e, next) => {
+    const tool = String(e.tool)
+    if (tool !== 'ScheduleWakeup' && tool !== 'CronCreate' && tool !== 'CronDelete' && tool !== 'Workflow') return next(e)
+    const called = await next(e)
+    const result = 'result' in called && typeof called.result === 'object' && called.result !== null
+      ? (called.result as Record<string, unknown>)
+      : null
+    if (!('deny' in called && called.deny !== undefined) && called.isError !== true) {
+      keeper.onToolCall(await $.clock.now(), tool, e as unknown as Record<string, unknown>, result)
+    }
+    return called
   })
 
   on('command.run', { command: 'rate-limit-options' }, async ($, e, next) => {

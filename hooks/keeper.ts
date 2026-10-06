@@ -74,6 +74,7 @@ export function freshCore(): KeepGoingCore {
       failureTurnStartedAt: -1,
       lastEditAt: 0,
     },
+    scheduled: { recurringCrons: 0, oneShotCrons: 0, wakeUntil: 0, workflows: 0 },
     isPaused: false,
     cacheTtlMs: null,
   }
@@ -145,6 +146,7 @@ export class Keeper {
         ...fresh,
         ...held,
         activity: { ...fresh.activity, ...held.activity },
+        scheduled: { ...fresh.scheduled, ...held.scheduled },
       }
       return
     }
@@ -469,6 +471,40 @@ export class Keeper {
     this.core.activity.lastEditAt = now
   }
 
+  /**
+   * Scheduled work, from the tool calls that set it up: the Stop hook that
+   * used to report it never reaches a mod.
+   */
+  onToolCall(now: number, tool: string, input: Record<string, unknown>, result: Record<string, unknown> | null): void {
+    const s = this.core.scheduled
+    if (tool === 'ScheduleWakeup') {
+      if (input.stop === true) s.wakeUntil = 0
+      else if (result !== null && typeof result.scheduledFor === 'number') s.wakeUntil = Math.max(s.wakeUntil, result.scheduledFor + 60_000)
+      else if (typeof input.delaySeconds === 'number') s.wakeUntil = Math.max(s.wakeUntil, now + input.delaySeconds * 1000 + 60_000)
+    } else if (tool === 'CronCreate') {
+      const isRecurring = result !== null && typeof result.recurring === 'boolean' ? result.recurring : input.recurring !== false
+      if (isRecurring) s.recurringCrons += 1
+      else s.oneShotCrons += 1
+    } else if (tool === 'CronDelete') {
+      if (s.recurringCrons > 0) s.recurringCrons -= 1
+      else if (s.oneShotCrons > 0) s.oneShotCrons -= 1
+    } else if (tool === 'Workflow') {
+      s.workflows += 1
+    }
+  }
+
+  /** A scheduled prompt or a task's notification arrived: one less thing to wait for. */
+  onDelivered(kind: string): void {
+    const s = this.core.scheduled
+    if (kind === 'scheduled-trigger' && s.oneShotCrons > 0 && s.recurringCrons === 0) s.oneShotCrons -= 1
+    if (kind === 'task-notification' && s.workflows > 0) s.workflows -= 1
+  }
+
+  pendingSchedules(now: number): number {
+    const s = this.core.scheduled
+    return s.recurringCrons + s.oneShotCrons + s.workflows + (s.wakeUntil > now ? 1 : 0)
+  }
+
   onWrapUpNotice(now: number): void {
     this.core.wrapUp.noticeAt = now
     this.log.info('near-limit wrap-up notice seen')
@@ -603,7 +639,7 @@ export class Keeper {
       isBusy: a.isBusy,
       handledIdleSince: c.handledIdleSince,
       background: a.background ?? await this.io.busyAgents(),
-      crons: a.crons,
+      crons: Math.max(a.crons, this.pendingSchedules(now)),
       permissionAt: a.permissionAt,
       lastSentAt: c.lastSentAt,
       lastAnswer: a.lastAnswer,
