@@ -234,6 +234,13 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  on('session.compact', async ($, e, next) => {
+    const result = await next(e)
+    const isByPerson = e.trigger === 'manual' || e.trigger === 'auto'
+    if (isByPerson && e.agentId === undefined && result.skip === undefined) await keeper.onCompacted()
+    return result
+  })
+
   on('turn.step', async function* ($, e, next) {
     const model = keeper.stepModel(e.model, Date.now())
     const sent = model === null ? e : { ...e, model }

@@ -465,6 +465,15 @@ export class Keeper {
     await this.save()
   }
 
+  /** The conversation was compacted by someone else, so a pending request has nothing left to do. */
+  async onCompacted(): Promise<void> {
+    const c = this.core.compact
+    c.request = null
+    c.scheduledFor = 0
+    c.handledIdleSince = this.core.activity.idleSince
+    await this.save()
+  }
+
   /** A notice row or line Claude Code showed; true when it was about its own auto-continue. */
   onNotice(now: number, text: string): boolean {
     const notice = nativeNoticeOf(text)

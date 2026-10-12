@@ -324,6 +324,18 @@ describe('compaction', () => {
     expect(f.keeper.core.compact.request).toBe(null)
   })
 
+  test('a compaction by the person drops a pending request', async () => {
+    const f = fakeOf({ compact: { enabled: true, trigger: 'request' } })
+    await turn(f, 'answer')
+    await f.keeper.requestCompact('the open bugs')
+    await f.advance(MIN)
+    await f.keeper.onCompacted()
+    await f.advance(60 * MIN)
+    expect(f.compacted).toEqual([])
+    expect(f.keeper.core.compact.request).toBe(null)
+    expect(f.keeper.core.compact.scheduledFor).toBe(0)
+  })
+
   test('the last message asking for /compact triggers it once', async () => {
     const f = fakeOf({ compact: { enabled: true, trigger: 'request', matchLastMessage: true } })
     await turn(f, 'answer', 'All done. Run /compact when you are back.')
