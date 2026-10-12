@@ -1,7 +1,7 @@
 {
   "name": "keep-going",
   "displayName": "Keep going",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Keeps unattended sessions going: continues after usage limits reset, retries API overload with backoff, resumes cut-off responses, and compacts idle sessions before the prompt cache expires.",
   "author": { "name": "Hugo Sales" },
   "homepage": "https://github.com/someonewithpc/claude-mod-keep-going",
