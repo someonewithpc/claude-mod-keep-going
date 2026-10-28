@@ -3,7 +3,7 @@ import type { Register, TurnStepChunk } from 'claude-code'
 
 import { overloadWaitMs } from './backoff'
 import { applyOptions, mergeFiles, validate } from './config'
-import { backgroundOf, isPersonPrompt, Keeper } from './keeper'
+import { isPersonPrompt, Keeper } from './keeper'
 
 const TOOL = 'request_compact'
 const TOOL_NAME = 'mcp__keep-going__request_compact'
@@ -210,27 +210,6 @@ export const register: Register = (on, options) => {
 
   on('turn.complete', async ($, e, next) => {
     if (e.agentId === undefined) await keeper.onTurnComplete(e.reason, e.answer)
-    return next(e)
-  })
-
-  on('classic.StopFailure', async ($, e, next) => {
-    await keeper.onStopFailure(e.error, e.last_assistant_message ?? e.error_details ?? '')
-    return next(e)
-  })
-
-  on('classic.Stop', async ($, e, next) => {
-    keeper.onStop(backgroundOf(e.background_tasks), e.session_crons?.length ?? 0)
-    return next(e)
-  })
-
-  on('classic.Notification', async ($, e, next) => {
-    keeper.onNotification(await $.clock.now(), e.notification_type)
-    await keeper.save()
-    return next(e)
-  })
-
-  on('classic.PostModelSwitch', async ($, e, next) => {
-    keeper.core.cacheTtlMs = e.cache_ttl === '1h' ? 3600_000 : 300_000
     return next(e)
   })
 

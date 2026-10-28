@@ -29,8 +29,6 @@ function worldOf(on: On, files: Record<string, string> = {}, isLimited = true): 
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
   on('turn.complete', ($, e) => ({ text: e.answer }))
-  on('classic.StopFailure', () => ({}))
-  on('classic.Stop', () => ({}))
   on('session.id', () => ({ value: '0123456789abcdef' }))
   on('session.model', () => ({ value: 'claude-opus-5-5' }))
   on('session.messages', () => ({ value: [] }))
@@ -86,12 +84,8 @@ describe('through the engine', () => {
     })
     await $.session.start(SESSION)
     await $.turn.start({ text: 'go', turnId: 't1' })
-    await $.classic.StopFailure({
-      error: 'rate_limit',
-      last_assistant_message: "You've hit your session limit · resets 2pm (UTC)",
-    })
-    await $.turn.complete({ ...ENDED, reason: 'error' })
-    await world.clock.settle()
+    await $.turn.complete({ ...ENDED, reason: 'error', answer: "You've hit your session limit · resets 2pm (UTC)" })
+    await world.clock.advance(2000)
     expect(world.transcript.some((l) => l.includes('continuing at'))).toBe(true)
 
     await world.clock.advance(2 * 3600_000 + 30_000)
@@ -104,9 +98,8 @@ describe('through the engine', () => {
     const world = worldOf(on)
     await $.session.start(SESSION)
     await $.turn.start({ text: 'go', turnId: 't1' })
-    await $.classic.StopFailure({ error: 'overloaded', last_assistant_message: 'API Error: 529 overloaded_error' })
-    await $.turn.complete({ ...ENDED, reason: 'error' })
-    await world.clock.settle()
+    await $.turn.complete({ ...ENDED, reason: 'error', answer: 'API Error: 529 overloaded_error' })
+    await world.clock.advance(2000)
 
     const status = await $.command.run({ ...TYPED, command: 'keep-going', args: '' })
     expect(status.text).toContain('API error: retry 1 in')
@@ -123,7 +116,6 @@ describe('through the engine', () => {
     await $.session.start(SESSION)
     await $.turn.start({ text: 'go', turnId: 't1' })
     await $.turn.complete({ ...ENDED, reason: 'answer' })
-    await $.classic.Stop({ stop_hook_active: false, background_tasks: [], session_crons: [] })
     const called = await $.tool.call({ tool: 'mcp__keep-going__request_compact', focus: 'the plan' })
     expect(String(called.result)).toContain('Compaction requested')
 
@@ -151,9 +143,8 @@ describe('through the engine', () => {
     const world = worldOf(on)
     await $.session.start(SESSION)
     await $.turn.start({ text: 'go', turnId: 't1' })
-    await $.classic.StopFailure({ error: 'overloaded', last_assistant_message: 'API Error: 529' })
-    await $.turn.complete({ ...ENDED, reason: 'error' })
-    await world.clock.settle()
+    await $.turn.complete({ ...ENDED, reason: 'error', answer: 'API Error: 529' })
+    await world.clock.advance(2000)
 
     for (const surface of ['terminal', 'desktop'] as const) {
       const ui = await $.ui.mount({ plugin: 'keep-going', surface, component: 'AbovePrompt', props: {} as never })

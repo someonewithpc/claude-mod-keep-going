@@ -49,7 +49,6 @@ const FAILURE_SETTLE_MS = 1_500
 const WRAP_UP_DELAY_MS = 2_000
 
 /** Background tasks that run for the whole session and end without a Stop. */
-const LONG_LIVED_TASKS = new Set(['monitor', 'shell'])
 
 /** Prompts that mean the person is at the keyboard (or on their phone). */
 const PERSON_ORIGINS = new Set(['composer', 'bridge'])
@@ -251,9 +250,8 @@ export class Keeper {
   }
 
   /**
-   * A turn that ended in an error when no StopFailure reached us for it: the
-   * classic event only fires while some hook is registered for it, so this
-   * reads the error message the turn ended on instead.
+   * A turn that ended in an error: classic.StopFailure never reaches an
+   * installed mod, so this reads the error message the turn ended on.
    */
   private async classifyLate(turnStartedAt: number, answer: string): Promise<void> {
     if (this.core.activity.failureTurnStartedAt === turnStartedAt) return
@@ -826,8 +824,3 @@ const MODEL_IDS: Record<string, string> = {
 export const modelIdOf = (name: string) => MODEL_IDS[name.toLowerCase()] ?? name
 
 export const isPersonPrompt = (kind: string) => PERSON_ORIGINS.has(kind)
-
-export function backgroundOf(tasks: unknown): number | null {
-  if (!Array.isArray(tasks)) return null
-  return tasks.filter((t: { type?: unknown }) => !LONG_LIVED_TASKS.has(String(t?.type))).length
-}
