@@ -328,8 +328,9 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
-  on('session.append', async ($, e, next) => {
-    if (e.agentId === undefined && e.door !== 'response' && e.door !== 'tool-result' && e.door !== 'prompt') {
+  // Claude Code sends the attachment, hook-context and compaction doors past installed mods.
+  on('session.append', { door: ['command', 'delivery', 'note', 'notice'] }, async ($, e, next) => {
+    if (e.agentId === undefined) {
       const text = textOf((e.message as { content?: unknown }).content)
       const now = await $.clock.now()
       if (WRAP_UP.test(text)) keeper.onWrapUpNotice(now)
