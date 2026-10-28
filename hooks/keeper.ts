@@ -129,11 +129,15 @@ export class Keeper {
       this.lastBadge = badge
       await this.io.writeBadge(badge).catch(() => {})
     }
+    // The store is shared by every session; one that holds its lock fails this
+    // write, and the next save writes the snapshot again.
     if (this.sessionId !== '') {
       await this.io.storeSet(`session:${this.sessionId}`, {
         savedAt: now,
         usage: this.core.usage,
         fallback: this.core.fallback,
+      }).catch((error: unknown) => {
+        this.log.info(`could not save the session to the store: ${error instanceof Error ? error.message : String(error)}`)
       })
     }
   }

@@ -490,3 +490,15 @@ describe('restart', () => {
     expect(g.keeper.core.usage?.until).toBe(until)
   })
 })
+
+describe('the store', () => {
+  test('a write that fails does not fail the save', async () => {
+    const f = fakeOf()
+    f.keeper.sessionId = 'abc'
+    f.io.storeSet = async () => {
+      throw new Error('$.store.set failed: Lock file is already being held')
+    }
+    await f.keeper.onTurnStart()
+    expect(f.keeper.core.activity.isBusy).toBe(true)
+  })
+})
