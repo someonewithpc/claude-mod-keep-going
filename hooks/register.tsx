@@ -318,8 +318,9 @@ export const register: Register = (on, options) => {
     return {}
   })
 
-  on('prompt.edit', async ($, e, next) => {
-    keeper.onEdit(await $.clock.now())
+  // Every keystroke raises this under a 50ms budget, which a round trip to the clock can miss.
+  on('prompt.edit', ($, e, next) => {
+    void $.clock.now().then((now) => keeper.onEdit(now))
     return next(e)
   })
 
