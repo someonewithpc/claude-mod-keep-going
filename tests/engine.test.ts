@@ -60,7 +60,7 @@ function worldOf(on: On, files: Record<string, string> = {}, isLimited = true): 
   })
   on('session.compact', ($, e) => {
     world.compacted.push(e.instructions)
-    return { messages: e.messages }
+    return { messages: [{ role: 'user', text: 'summary', toolUses: [] }] }
   })
   on('ui.status', ($, e) => {
     world.statuses.push(e.text)
