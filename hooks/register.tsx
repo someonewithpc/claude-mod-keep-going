@@ -387,9 +387,12 @@ export const register: Register = (on, options) => {
       else if (what === 'compact') {
         keeper.core.compact.scheduledFor = 0
         keeper.core.compact.handledIdleSince = keeper.core.activity.idleSince
-        await keeper.compactNow(keeper.core.compact.request?.focus ?? keeper.config.compact.focus, 'from the band')
-        keeper.core.compact.request = null
-        await keeper.save()
+        // A compaction outlasts the 10s a press may take, so it runs on a timer of its own.
+        $.clock.after(0, async () => {
+          await keeper.compactNow(keeper.core.compact.request?.focus ?? keeper.config.compact.focus, 'from the band')
+          keeper.core.compact.request = null
+          await keeper.save()
+        })
       } else await keeper.cancel()
     }
     const labels = { continue: 'Continue now', cancel: 'Cancel', compact: 'Compact now', skip: 'Skip' } as const
