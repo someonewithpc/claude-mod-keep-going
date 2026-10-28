@@ -336,6 +336,27 @@ describe('compaction', () => {
     expect(f.keeper.core.compact.scheduledFor).toBe(0)
   })
 
+  test('a context that falls to half drops a pending request', async () => {
+    const f = fakeOf({ compact: { enabled: true, trigger: 'request' } })
+    await f.keeper.onContext(202_000)
+    await turn(f, 'answer')
+    await f.keeper.requestCompact('the open bugs')
+    await f.keeper.onContext(49_000)
+    await f.advance(60 * MIN)
+    expect(f.compacted).toEqual([])
+    expect(f.keeper.core.compact.request).toBe(null)
+  })
+
+  test('a context that shrinks a little keeps the request', async () => {
+    const f = fakeOf({ compact: { enabled: true, trigger: 'request' } })
+    await f.keeper.onContext(202_000)
+    await turn(f, 'answer')
+    await f.keeper.requestCompact('the open bugs')
+    await f.keeper.onContext(150_000)
+    await f.advance(56 * MIN)
+    expect(f.compacted).toEqual(['the open bugs'])
+  })
+
   test('the last message asking for /compact triggers it once', async () => {
     const f = fakeOf({ compact: { enabled: true, trigger: 'request', matchLastMessage: true } })
     await turn(f, 'answer', 'All done. Run /compact when you are back.')

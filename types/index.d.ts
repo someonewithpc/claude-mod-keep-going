@@ -64,6 +64,8 @@ export type KeepGoingActivity = {
   /** The model the session was on when it went idle; another one now means a cold cache. */
   idleModel: string
   lastEditAt: number
+  /** The main conversation's context fill at the last measurement; null before one. */
+  contextTokens: number | null
 }
 
 /** Scheduled work the session is waiting on, from the tool calls that set it up. */

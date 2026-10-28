@@ -79,6 +79,7 @@ export function freshCore(): KeepGoingCore {
       failureTurnStartedAt: -1,
       idleModel: '',
       lastEditAt: 0,
+      contextTokens: null,
     },
     scheduled: { recurringCrons: 0, oneShotCrons: 0, wakeUntil: 0, workflows: 0 },
     models: {},
@@ -357,6 +358,23 @@ export class Keeper {
   }
 
   /** A wait taken from `fallbackWaitHours` moves to the real reset once one is known. */
+  /**
+   * A context fill that fell to half or less since the last reading. No
+   * compaction event reaches a mod, and Claude Code's own auto-compaction runs
+   * no command, so this is how one shows: a /clear or a rewind looks the same,
+   * and each leaves a pending request nothing to do.
+   */
+  async onContext(tokens: number | null): Promise<void> {
+    const a = this.core.activity
+    const before = a.contextTokens
+    a.contextTokens = tokens
+    if (tokens === null || before === null || tokens > before / 2) return
+    const c = this.core.compact
+    if (c.request === null && c.scheduledFor === 0) return
+    this.log.info(`context fell from ${before} to ${tokens} tokens: dropping the pending compaction`)
+    await this.onCompacted()
+  }
+
   async onMeasure(): Promise<void> {
     const u = this.core.usage
     if (u === null || !u.isFallback) return

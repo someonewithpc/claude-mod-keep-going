@@ -274,6 +274,7 @@ export const register: Register = (on, options) => {
 
   on('session.measure', async ($, e, next) => {
     if (e.changed.includes('rateLimits')) await keeper.onMeasure()
+    if (e.changed.includes('context')) await keeper.onContext(e.context.tokens ?? null)
     return next(e)
   })
 
