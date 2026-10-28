@@ -434,8 +434,12 @@ export class Keeper {
     return model.toLowerCase().includes(f.from.toLowerCase()) ? f.to : null
   }
 
+  onPermissionAsk(now: number): void {
+    this.core.activity.permissionAt = now
+  }
+
   onNotification(now: number, type: string): void {
-    if (type === 'permission_prompt') this.core.activity.permissionAt = now
+    if (type === 'permission_prompt') this.onPermissionAsk(now)
     const u = this.core.usage
     if (u === null) return
     const notice = type === 'quota_auto_resume_fired' ? 'fired'

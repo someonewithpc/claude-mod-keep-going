@@ -306,6 +306,12 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  on('tool.check', async ($, e, next) => {
+    const verdict = await next(e)
+    if (verdict.decision === 'ask' && e.agentId === undefined) keeper.onPermissionAsk(await $.clock.now())
+    return verdict
+  })
+
   on('tool.call', async ($, e, next) => {
     const tool = String(e.tool)
     if (tool !== 'ScheduleWakeup' && tool !== 'CronCreate' && tool !== 'CronDelete' && tool !== 'Workflow') return next(e)
