@@ -123,6 +123,21 @@ describe('through the engine', () => {
     expect(world.compacted).toEqual(['the plan'])
   })
 
+  test('a /compact drops the pending request', async ($, on) => {
+    const world = worldOf(on, {
+      '/etc/xdg/claude-keep-going/config.json': JSON.stringify({ compact: { enabled: true, trigger: 'request' } }),
+    })
+    on('command.run', ($, e) => ({ text: e.command }))
+    await $.session.start(SESSION)
+    await $.turn.start({ text: 'go', turnId: 't1' })
+    await $.turn.complete({ ...ENDED, reason: 'answer' })
+    await $.tool.call({ tool: 'mcp__keep-going__request_compact', focus: 'the plan' })
+    await $.command.run({ ...TYPED, command: 'compact', args: '' })
+
+    await world.clock.advance(56 * 60_000)
+    expect(world.compacted).toEqual([])
+  })
+
   test('a permission ask while idle holds the compaction off', async ($, on) => {
     const world = worldOf(on, {
       '/etc/xdg/claude-keep-going/config.json': JSON.stringify({ compact: { enabled: true, trigger: 'request' } }),
