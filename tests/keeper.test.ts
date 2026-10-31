@@ -112,6 +112,16 @@ describe('usage limit', () => {
     expect(f.keeper.core.usage?.isFallback).toBe(false)
   })
 
+  test('waits for the exact reset a pooling proxy names', async () => {
+    const f = fakeOf({ native: { usageLimit: 'ignore' } })
+    f.rateLimits = [{ kind: 'five_hour', percentUsed: 100, resetsAt: new Date(f.clock.now + HOUR).toISOString() }]
+    const text = 'API Error: Server is temporarily limiting requests (not your usage limit) · All credentials for model claude-opus-5-5 are cooling down, resets at 2026-10-06T14:37:12Z (last error: rate_limit_error: This request would exceed your account\'s rate limit. Please try again later.)'
+    await f.keeper.onTurnStart()
+    await f.keeper.onStopFailure('rate_limit', text)
+    expect(f.keeper.core.usage?.until).toBe(Date.UTC(2026, 9, 6, 14, 38, 12))
+    expect(f.keeper.core.retry).toBe(null)
+  })
+
   test('gives Claude Code its own auto-continue first', async () => {
     const f = fakeOf({ networkCheck: { enabled: false } })
     await f.keeper.onTurnStart()
@@ -479,6 +489,13 @@ describe('model fallback', () => {
     await f.advance(3 * HOUR + MIN)
     expect(f.keeper.core.fallback).toBe(null)
     expect(f.keeper.stepModel('claude-opus-5-5', f.clock.now)).toBe(null)
+  })
+
+  test("a pooling proxy's reset ends the fallback", async () => {
+    const f = fakeOf({ modelFallback: { enabled: true, map: { Opus: 'sonnet' } } })
+    await f.keeper.onTurnStart()
+    await f.keeper.onStopFailure('rate_limit', 'All credentials for model claude-opus-5-5 are cooling down, resets at 2026-10-06T13:20:00Z')
+    expect(f.keeper.core.fallback?.resetAt).toBe(Date.UTC(2026, 9, 6, 13, 21))
   })
 
   test('an unmapped model waits like any usage limit', async () => {

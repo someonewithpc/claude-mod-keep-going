@@ -1,7 +1,7 @@
 import type { SessionRateLimit } from 'claude-code'
 
 import { overloadWaitMs, INCIDENT_GAP_MS } from './backoff'
-import { classify, nativeNoticeOf, type Failure } from './classify'
+import { classify, nativeNoticeOf, resetAtOf, type Failure } from './classify'
 import { decideCompact } from './compact'
 import { DEFAULTS, type Config } from './config'
 import { parseResetTime, calculateWaitMs } from './lib/time-parser.js'
@@ -314,8 +314,11 @@ export class Keeper {
     let until: number
     let isFallback = false
     const fromApi = await this.resetFromRateLimits()
+    const exact = resetAtOf(banner)
     const parsed = parseResetTime(banner)
-    if (fromApi !== null && fromApi > now - 3600_000) {
+    if (exact !== null) {
+      until = Math.max(now, exact) + margin
+    } else if (fromApi !== null && fromApi > now - 3600_000) {
       until = Math.max(now, fromApi) + margin
     } else if (parsed !== null) {
       until = now + calculateWaitMs(parsed, this.config.marginSeconds, this.config.fallbackWaitHours, new Date(now))
@@ -353,7 +356,7 @@ export class Keeper {
       wait.nativeNotice = native.notice
       wait.nativeNoticeAt = native.at
     }
-    const source = fromApi !== null ? 'the API' : parsed !== null ? 'the banner' : 'no reset time, the fallback wait'
+    const source = exact !== null ? 'the proxy' : fromApi !== null ? 'the API' : parsed !== null ? 'the banner' : 'no reset time, the fallback wait'
     this.log.notice(`usage limit: continuing at ${clockOf(until)}, in ${durationOf(until - now)} (from ${source})`)
   }
 
@@ -431,8 +434,9 @@ export class Keeper {
     if (alias === undefined) return false
     const f = this.core.fallback
     if (f !== null && f.from.toLowerCase() === model.toLowerCase()) return false
+    const exact = resetAtOf(banner)
     const parsed = parseResetTime(banner)
-    const resetAt = parsed !== null
+    const resetAt = exact !== null ? Math.max(now, exact) + this.config.marginSeconds * 1000 : parsed !== null
       ? now + calculateWaitMs(parsed, this.config.marginSeconds, this.config.fallbackWaitHours, new Date(now))
       : now + this.config.fallbackWaitHours * 3600_000
     const to = this.core.models[alias.toLowerCase()] ?? modelIdOf(alias)

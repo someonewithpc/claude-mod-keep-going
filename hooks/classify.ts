@@ -46,6 +46,17 @@ const API_LIMITED = /temporarily limiting requests/
 const POOL_EXHAUSTED = /All credentials for model (?:claude-)?([a-z]+)[\w.-]* are cooling down/i
 
 /**
+ * The exact reset a patched CLIProxyAPI appends to that message: "..., resets
+ * at 2026-10-31T21:30:00Z". Null when the text names no such time.
+ */
+export function resetAtOf(text: string): number | null {
+  const iso = /resets at (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?(?:Z|[+-]\d\d:\d\d))/.exec(text)?.[1]
+  if (iso === undefined) return null
+  const at = Date.parse(iso)
+  return Number.isFinite(at) ? at : null
+}
+
+/**
  * One failed turn, from what Claude Code reported: the StopFailure `error`
  * kind when the classic event carried one, and the error message it showed.
  * Null for a failure retrying cannot fix (auth, billing, a bad request).
