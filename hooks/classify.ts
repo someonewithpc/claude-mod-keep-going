@@ -38,6 +38,14 @@ const USAGE = /(?:hit|reached) your [\w.-]+ limit|usage limit reached|out of (?:
 const API_LIMITED = /temporarily limiting requests/
 
 /**
+ * A proxy that pools several accounts (CLIProxyAPI) answers with this once
+ * every account it holds has hit its limit. Claude Code wraps that 429 in its
+ * "not your usage limit" text, but it is a usage limit: an overload retry a
+ * few seconds later fails the same way.
+ */
+const POOL_EXHAUSTED = /All credentials for model (?:claude-)?([a-z]+)[\w.-]* are cooling down/i
+
+/**
  * One failed turn, from what Claude Code reported: the StopFailure `error`
  * kind when the classic event carried one, and the error message it showed.
  * Null for a failure retrying cannot fix (auth, billing, a bad request).
@@ -46,6 +54,8 @@ export function classify(error: string | null, text: string, customPatterns: rea
   if (customPatterns.some((p) => new RegExp(p, 'i').test(text))) return { kind: 'usage', text, model: null }
   if (SAFEGUARD.test(text)) return { kind: 'safeguard', text }
   if (INTERRUPTED.test(text)) return { kind: 'interrupted', text }
+  const pooled = POOL_EXHAUSTED.exec(text)?.[1]
+  if (pooled !== undefined) return { kind: 'usage', text, model: pooled.charAt(0).toUpperCase() + pooled.slice(1).toLowerCase() }
   if (error === 'rate_limit' || (error === null && USAGE.test(text))) {
     if (API_LIMITED.test(text)) return { kind: 'overload', text }
     return { kind: 'usage', text, model: scopedModel(text) }

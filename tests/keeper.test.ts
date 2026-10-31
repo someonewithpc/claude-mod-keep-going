@@ -23,6 +23,12 @@ describe('classify', () => {
       .toMatchObject({ kind: 'overload' })
   })
 
+  test('a proxy with every account cooling down is a limit on that model', () => {
+    const text = 'API Error: Server is temporarily limiting requests (not your usage limit) · All credentials for model claude-opus-5-5 are cooling down (last error: rate_limit_error: This request would exceed your account\'s rate limit. Please try again later.)'
+    expect(classify('rate_limit', text)).toEqual({ kind: 'usage', text, model: 'Opus' })
+    expect(classify(null, text)).toMatchObject({ kind: 'usage', model: 'Opus' })
+  })
+
   test('a cut-off stream is told from a 5xx by its words', () => {
     const cut = 'API Error: Your computer went to sleep mid-response. The response above may be incomplete.'
     expect(classify('server_error', cut)).toMatchObject({ kind: 'interrupted' })
