@@ -397,14 +397,19 @@ export const register: Register = (on, options) => {
       } else await keeper.cancel()
     }
     const labels = { continue: 'Continue now', cancel: 'Cancel', compact: 'Compact now', skip: 'Skip' } as const
+    // The plugins beneath may draw buttons that answer chords, and those only work while drawn
+    const beneath = await next(e)
 
     return (
-      <Box flexDirection="row" columnGap={1}>
-        <Text dimColor>keep-going: {view.line}</Text>
-        {view.actions.flatMap((what, i) => [
-          ...(i > 0 ? [<Text key={`${what}-bar`} dimColor>|</Text>] : []),
-          <Button key={what} label={labels[what]} plain onPress={act(what)} />,
-        ])}
+      <Box flexDirection="column">
+        <Box flexDirection="row" columnGap={1}>
+          <Text dimColor>keep-going: {view.line}</Text>
+          {view.actions.flatMap((what, i) => [
+            ...(i > 0 ? [<Text key={`${what}-bar`} dimColor>|</Text>] : []),
+            <Button key={what} label={labels[what]} plain onPress={act(what)} />,
+          ])}
+        </Box>
+        {beneath}
       </Box>
     )
   })

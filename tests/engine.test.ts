@@ -1,4 +1,4 @@
-import type { On } from 'claude-code'
+import type { On, RenderElement } from 'claude-code'
 import { describe, expect, mock, test } from 'claude-code/testing'
 
 const NOW = Date.UTC(2026, 9, 6, 12, 0)
@@ -63,6 +63,10 @@ function worldOf(on: On, files: Record<string, string> = {}, isLimited = true): 
   on('ui.status', ($, e) => {
     world.statuses.push(e.text)
     return { value: undefined }
+  })
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+    return h(Box, null) as RenderElement
   })
   on('ui.log', ($, e) => {
     if (e.to !== 'debug') world.transcript.push(e.text)
@@ -181,6 +185,25 @@ describe('through the engine', () => {
     for (const surface of ['terminal', 'desktop'] as const) {
       const ui = await $.ui.mount({ plugin: 'keep-going', surface, component: 'AbovePrompt', props: {} as never })
       expect(await ui.find({ key: 'continue' })).toBeDefined()
+      await ui.unmount()
+    }
+  })
+
+  test('the band with buttons still draws the plugins beneath it', async ($, on) => {
+    on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+      const { Button } = $.ui.resolve(e)
+      return h(Button, { key: 'beneath', label: 'Beneath', onPress: () => {} }) as RenderElement
+    })
+    const world = worldOf(on)
+    await $.session.start(SESSION)
+    await $.turn.start({ text: 'go', turnId: 't1' })
+    await $.turn.complete({ ...ENDED, reason: 'error', answer: 'API Error: 529' })
+    await world.clock.advance(2000)
+
+    for (const surface of ['terminal', 'desktop'] as const) {
+      const ui = await $.ui.mount({ plugin: 'keep-going', surface, component: 'AbovePrompt', props: {} as never })
+      expect(await ui.find({ key: 'continue' })).toBeDefined()
+      expect(await ui.find({ key: 'beneath' })).toBeDefined()
       await ui.unmount()
     }
   })
