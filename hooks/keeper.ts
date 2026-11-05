@@ -725,6 +725,7 @@ export class Keeper {
     const inputs = () => {
       const expiry = cacheExpiresAt === null
         ? `estimated ${at(a.idleSince + cacheTtlMs)} from a ${durationOf(cacheTtlMs)} TTL (${ttl.source})`
+          + (saved === null ? ', the statusline file has no prompt_cache section' : '')
         : cacheExpiresAt === 0 ? 'cold per the statusline' : `${at(cacheExpiresAt)} per the statusline`
       return `idle since ${at(a.idleSince)}, cache expiry ${expiry}, context ${context.tokens ?? '?'} tokens`
     }

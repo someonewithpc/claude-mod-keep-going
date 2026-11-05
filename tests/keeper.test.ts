@@ -441,6 +441,14 @@ describe('compaction waits', () => {
     expect(f.compacted).toEqual([''])
   })
 
+  test('says so when the statusline has no prompt_cache to go by', async () => {
+    const f = fakeOf(POLICY)
+    f.context = { percent: 30, tokens: 150_000, isSubscription: true }
+    await turn(f, 'answer')
+    await f.advance(MIN)
+    expect(f.infos.some((line) => line.includes('scheduled') && line.includes('no prompt_cache section'))).toBe(true)
+  })
+
   test('skips a cache the statusline says is cold, or one a model switch made cold', async () => {
     const f = fakeOf(POLICY)
     f.context = { percent: 30, tokens: 150_000, isSubscription: true }
