@@ -700,6 +700,8 @@ export class Keeper {
     const c = this.core.compact
     const a = this.core.activity
     const context = await this.io.context()
+    const cacheTtlMs = this.cacheTtlMs(context.isSubscription)
+    const cacheExpiresAt = await this.cacheExpiry()
     const decision = decideCompact(this.config.compact, {
       now,
       idleSince: a.idleSince,
@@ -714,9 +716,17 @@ export class Keeper {
       request: c.request,
       context: { percent: context.percent, tokens: context.tokens },
       lastUserAt: a.lastUserAt,
-      cacheTtlMs: this.cacheTtlMs(context.isSubscription),
-      cacheExpiresAt: await this.cacheExpiry(),
+      cacheTtlMs,
+      cacheExpiresAt,
     })
+    const at = (ms: number) => new Date(ms).toTimeString().slice(0, 8)
+    const inputs = () => {
+      const expiry = cacheExpiresAt === null
+        ? `estimated ${at(a.idleSince + cacheTtlMs)} from a ${durationOf(cacheTtlMs)} TTL`
+          + ` (${this.config.compact.cacheTtlMinutes !== null ? 'compact.cacheTtlMinutes' : context.isSubscription ? 'subscription' : 'no rate limits, so API key'})`
+        : cacheExpiresAt === 0 ? 'cold per the statusline' : `${at(cacheExpiresAt)} per the statusline`
+      return `idle since ${at(a.idleSince)}, cache expiry ${expiry}, context ${context.tokens ?? '?'} tokens`
+    }
 
     if (decision.action === 'none') {
       c.scheduledFor = 0
@@ -731,14 +741,14 @@ export class Keeper {
     if (decision.action === 'cold') {
       c.handledIdleSince = a.idleSince
       c.scheduledFor = 0
-      this.log.info('compaction skipped: the prompt cache has already expired (compact-skipped-cold)')
+      this.log.info(`compaction skipped: the prompt cache has already expired (compact-skipped-cold): ${inputs()}`)
       return
     }
     if (decision.action === 'wait') {
       c.scheduledFor = decision.fireAt
       if (c.reportedIdleSince !== a.idleSince) {
         c.reportedIdleSince = a.idleSince
-        this.log.info(`compaction (${decision.trigger}) scheduled for ${clockOf(decision.fireAt)}`)
+        this.log.info(`compaction (${decision.trigger}) scheduled for ${clockOf(decision.fireAt)}: ${inputs()}`)
       }
       return
     }
@@ -748,6 +758,7 @@ export class Keeper {
     c.scheduledFor = 0
     if (decision.trigger === 'last-message') c.lastMatchedAnswer = a.lastAnswer
     if (decision.trigger === 'request') c.request = null
+    this.log.info(`compaction (${decision.trigger}) due: ${inputs()}`)
     await this.compactNow(decision.focus, decision.trigger)
   }
 
