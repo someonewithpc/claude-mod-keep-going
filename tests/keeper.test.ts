@@ -430,6 +430,17 @@ describe('compaction waits', () => {
     expect(f.compacted).toEqual([''])
   })
 
+  test('estimates from the TTL the statusline names, not the rate-limit guess', async () => {
+    const f = fakeOf(POLICY)
+    f.context = { percent: 30, tokens: 150_000, isSubscription: false }
+    f.cache = { expiresAt: null, isWarm: true, ttlMs: 60 * MIN }
+    await turn(f, 'answer')
+    await f.advance(54 * MIN)
+    expect(f.compacted).toEqual([])
+    await f.advance(2 * MIN)
+    expect(f.compacted).toEqual([''])
+  })
+
   test('skips a cache the statusline says is cold, or one a model switch made cold', async () => {
     const f = fakeOf(POLICY)
     f.context = { percent: 30, tokens: 150_000, isSubscription: true }

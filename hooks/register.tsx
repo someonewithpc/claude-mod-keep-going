@@ -9,6 +9,12 @@ const TOOL = 'request_compact'
 const TOOL_NAME = 'mcp__keep-going__request_compact'
 const MAX_LOG_LINES = 2000
 
+/** "5m" or "1h", as the statusline input writes prompt_cache.ttl. */
+const ttlMsOf = (ttl: unknown): number | null => {
+  const m = typeof ttl === 'string' ? /^(\d+)([mh])$/.exec(ttl) : null
+  return m === null ? null : Number(m[1]) * (m[2] === 'h' ? 3600_000 : 60_000)
+}
+
 const WRAP_UP = /Approaching your [\w-]+(?: usage)? limit|\[Usage limit approaching\. Checkpoint now/
 
 const HELP = [
@@ -111,13 +117,14 @@ export const register: Register = (on, options) => {
       },
       cacheExpiresAt: async () => {
         const saved = parsed(await $.fs.read(statuslinePath).catch(() => '')) as
-          | { prompt_cache?: { expires_at?: unknown; warm?: unknown } }
+          | { prompt_cache?: { expires_at?: unknown; warm?: unknown; ttl?: unknown } }
           | null
         const cache = saved?.prompt_cache
         if (cache === undefined) return null
         return {
           expiresAt: typeof cache.expires_at === 'number' ? cache.expires_at * 1000 : null,
           isWarm: cache.warm !== false,
+          ttlMs: ttlMsOf(cache.ttl),
         }
       },
       busyAgents: async () => (await $.agent.list())

@@ -111,9 +111,11 @@ for `compact.awayMinutes`. Compacting never touches what you have typed in the
 prompt box.
 
 No mod event carries the prompt cache's expiry, so keep-going estimates it from
-the end of the last turn and the cache TTL (`compact.cacheTtlMinutes`, or 60
-minutes on a subscription and 5 on an API key), and treats a model switch since
-then as a cold cache. For the exact time, have your statusline command save its
+the end of the last turn and the cache TTL, and treats a model switch since
+then as a cold cache. The TTL comes from `compact.cacheTtlMinutes`, then the
+statusline's `prompt_cache.ttl`, and otherwise a guess: 60 minutes when Claude
+Code reports rate limits, 5 when it doesn't. A proxy can hide the rate limits
+from a subscription, so set `compact.cacheTtlMinutes` behind one. For the exact time, have your statusline command save its
 input, which carries `prompt_cache.expires_at`:
 
 ```bash
@@ -205,7 +207,7 @@ fallback and the band above the prompt.
     "minContextPercent": 40,
     "minContextTokens": null,
     "settle": { "mode": "before-expiry", "marginSeconds": 300, "minutes": 4 },
-    "cacheTtlMinutes": null,       // null: 60 on a subscription, 5 on an API key
+    "cacheTtlMinutes": null,       // null: the statusline's ttl, else 60 with rate limits, 5 without
     "focus": "",
     "matchLastMessage": false,
     "minIntervalMinutes": 30,

@@ -20,7 +20,7 @@ export type Fake = {
   model: string
   agents: number
   lastText: string
-  cache: { expiresAt: number | null; isWarm: boolean } | null
+  cache: { expiresAt: number | null; isWarm: boolean; ttlMs?: number | null } | null
   timers: { at: number; fn: () => void }[]
   advance: (ms: number) => Promise<void>
 }
@@ -95,7 +95,7 @@ export function fakeOf(raw: unknown = {}, now = Date.UTC(2026, 9, 6, 12, 0)): Fa
     model: async () => fake.model,
     lastAssistantText: async () => fake.lastText,
     busyAgents: async () => fake.agents,
-    cacheExpiresAt: async () => fake.cache,
+    cacheExpiresAt: async () => fake.cache === null ? null : { ttlMs: null, ...fake.cache },
     submit: async (text) => {
       fake.submitted.push(text)
     },

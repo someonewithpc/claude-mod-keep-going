@@ -32,7 +32,7 @@ export type Io = {
    * script saved for this session; null when there is none. The mod API
    * carries no cache state, the statusline input does.
    */
-  cacheExpiresAt: () => Promise<{ expiresAt: number | null; isWarm: boolean } | null>
+  cacheExpiresAt: () => Promise<{ expiresAt: number | null; isWarm: boolean; ttlMs: number | null } | null>
   /** Subagents still working: pending or running, not a teammate sitting idle. */
   busyAgents: () => Promise<number>
   submit: (text: string) => Promise<void>
@@ -700,8 +700,10 @@ export class Keeper {
     const c = this.core.compact
     const a = this.core.activity
     const context = await this.io.context()
-    const cacheTtlMs = this.cacheTtlMs(context.isSubscription)
-    const cacheExpiresAt = await this.cacheExpiry()
+    const saved = await this.io.cacheExpiresAt().catch(() => null)
+    const ttl = this.cacheTtl(context.isSubscription, saved)
+    const cacheTtlMs = ttl.ms
+    const cacheExpiresAt = this.cacheExpiry(saved)
     const decision = decideCompact(this.config.compact, {
       now,
       idleSince: a.idleSince,
@@ -722,8 +724,7 @@ export class Keeper {
     const at = (ms: number) => new Date(ms).toTimeString().slice(0, 8)
     const inputs = () => {
       const expiry = cacheExpiresAt === null
-        ? `estimated ${at(a.idleSince + cacheTtlMs)} from a ${durationOf(cacheTtlMs)} TTL`
-          + ` (${this.config.compact.cacheTtlMinutes !== null ? 'compact.cacheTtlMinutes' : context.isSubscription ? 'subscription' : 'no rate limits, so API key'})`
+        ? `estimated ${at(a.idleSince + cacheTtlMs)} from a ${durationOf(cacheTtlMs)} TTL (${ttl.source})`
         : cacheExpiresAt === 0 ? 'cold per the statusline' : `${at(cacheExpiresAt)} per the statusline`
       return `idle since ${at(a.idleSince)}, cache expiry ${expiry}, context ${context.tokens ?? '?'} tokens`
     }
@@ -773,19 +774,22 @@ export class Keeper {
   }
 
   /** The statusline's expiry when one was saved after the last turn ended; null to estimate. */
-  private async cacheExpiry(): Promise<number | null> {
-    const saved = await this.io.cacheExpiresAt().catch(() => null)
+  private cacheExpiry(saved: Awaited<ReturnType<Io['cacheExpiresAt']>>): number | null {
     if (saved === null) return null
     if (!saved.isWarm) return 0
     if (saved.expiresAt === null || saved.expiresAt < this.core.activity.idleSince) return null
     return saved.expiresAt
   }
 
-  cacheTtlMs(isSubscription: boolean): number {
+  /** The TTL to estimate an expiry from, and where it came from for the log. */
+  private cacheTtl(isSubscription: boolean, saved: { ttlMs: number | null } | null): { ms: number; source: string } {
     const minutes = this.config.compact.cacheTtlMinutes
-    if (minutes !== null) return minutes * 60_000
-    if (this.core.cacheTtlMs !== null) return this.core.cacheTtlMs
-    return (isSubscription ? 60 : 5) * 60_000
+    if (minutes !== null) return { ms: minutes * 60_000, source: 'compact.cacheTtlMinutes' }
+    if (saved !== null && saved.ttlMs !== null) return { ms: saved.ttlMs, source: 'the statusline' }
+    if (this.core.cacheTtlMs !== null) return { ms: this.core.cacheTtlMs, source: 'saved state' }
+    return isSubscription
+      ? { ms: 3600_000, source: 'guessed: rate limits reported, so a subscription' }
+      : { ms: 300_000, source: 'guessed: no rate limits reported, so an API key' }
   }
 
   private async submit(text: string): Promise<void> {
@@ -839,7 +843,8 @@ export class Keeper {
     this.core.compact.request = { at: now, focus }
     if (this.core.compact.handledIdleSince === this.core.activity.idleSince) this.core.compact.handledIdleSince = 0
     await this.save()
-    const ttl = this.cacheTtlMs((await this.io.context()).isSubscription)
+    const saved = await this.io.cacheExpiresAt().catch(() => null)
+    const ttl = this.cacheTtl((await this.io.context()).isSubscription, saved).ms
     const margin = this.config.compact.settle.mode === 'before-expiry'
       ? ttl - this.config.compact.settle.marginSeconds * 1000
       : this.config.compact.settle.minutes * 60_000
