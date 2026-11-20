@@ -1,6 +1,9 @@
 import type { Config } from './config'
 
-export type CompactRequest = { at: number; focus: string }
+export type CompactWhen = 'before-expiry' | 'turn-end'
+
+/** `when` is absent on requests saved before it existed, which waited for the cache. */
+export type CompactRequest = { at: number; focus: string; when?: CompactWhen }
 
 export type CompactInputs = {
   now: number
@@ -49,10 +52,10 @@ export function inWindow(window: Config['compact']['window'], date: Date): boole
   return start <= end ? now >= start && now < end : now >= start || now < end
 }
 
-function triggerOf(c: Config['compact'], i: CompactInputs): { kind: CompactTriggerKind; focus: string } | null {
+function triggerOf(c: Config['compact'], i: CompactInputs): { kind: CompactTriggerKind; focus: string; isSoon?: boolean } | null {
   if ((c.trigger === 'request' || c.trigger === 'both')
       && i.request !== null && i.now - i.request.at < REQUEST_MAX_AGE_MS) {
-    return { kind: 'request', focus: i.request.focus || c.focus }
+    return { kind: 'request', focus: i.request.focus || c.focus, isSoon: i.request.when === 'turn-end' }
   }
   if (c.trigger === 'policy' || c.trigger === 'both') {
     const { percent, tokens } = i.context
@@ -72,7 +75,8 @@ function triggerOf(c: Config['compact'], i: CompactInputs): { kind: CompactTrigg
  * the whole context once: done while the prompt cache is warm that read is
  * billed at the cache rate, while after expiry the next message re-sends it
  * all cold anyway. So the default fires `settle.marginSeconds` before the
- * cache expires.
+ * cache expires. A request made with `when: 'turn-end'` fires as soon as
+ * the turn ends instead.
  */
 export function decideCompact(c: Config['compact'], i: CompactInputs): CompactDecision {
   if (!c.enabled || i.isBusy || i.idleSince === 0) return { action: 'none' }
@@ -90,7 +94,7 @@ export function decideCompact(c: Config['compact'], i: CompactInputs): CompactDe
   const expiresAt = i.cacheExpiresAt ?? i.idleSince + i.cacheTtlMs
   if (i.now >= expiresAt) return { action: 'cold' }
 
-  const fireAt = c.settle.mode === 'before-expiry'
+  const fireAt = trigger.isSoon ? i.idleSince : c.settle.mode === 'before-expiry'
     ? expiresAt - c.settle.marginSeconds * 1000
     : i.idleSince + c.settle.minutes * 60_000
   if (i.now < fireAt) return { action: 'wait', fireAt, trigger: trigger.kind, focus: trigger.focus }

@@ -99,7 +99,9 @@ message re-sends everything at full price anyway. So keep-going compacts an idle
 session `compact.settle.marginSeconds` before the cache expires, when:
 
 - Claude asked for it with the `request_compact` tool, or you did with
-  `/keep-going compact`, and `compact.trigger` is `request` or `both`
+  `/keep-going compact`, and `compact.trigger` is `request` or `both`. A
+  request with `when: "turn-end"` compacts as soon as the turn ends instead of
+  waiting for the cache
 - the context is over `compact.minContextPercent` and `compact.minContextTokens`,
   and `compact.trigger` is `policy` or `both`
 - Claude's last message mentions `/compact`, with `compact.matchLastMessage`

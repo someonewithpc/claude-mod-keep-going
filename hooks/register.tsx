@@ -184,10 +184,18 @@ export const register: Register = (on, options) => {
           description:
             'Ask for this conversation to be compacted once it has been idle a while, before the prompt cache '
             + 'expires. Call it when you finish a large piece of work and what comes next does not need the '
-            + 'details of it. Nothing happens while work is still running. `focus` names what the summary should keep.',
+            + 'details of it. Nothing happens while work is still running. `focus` names what the summary should keep. '
+            + 'Set `when` to "turn-end" to compact as soon as this turn ends instead of waiting for the cache.',
           inputSchema: {
             type: 'object',
-            properties: { focus: { type: 'string', description: 'What the summary should keep or stress' } },
+            properties: {
+              focus: { type: 'string', description: 'What the summary should keep or stress' },
+              when: {
+                type: 'string',
+                enum: ['before-expiry', 'turn-end'],
+                description: 'before-expiry (default): shortly before the prompt cache expires. turn-end: as soon as this turn ends',
+              },
+            },
           },
         })
       } catch (error) {
@@ -350,7 +358,7 @@ export const register: Register = (on, options) => {
 
   on('tool.call', { tool: TOOL_NAME }, async ($, e) => {
     const focus = typeof e.focus === 'string' ? e.focus : ''
-    return { result: await keeper.requestCompact(focus) }
+    return { result: await keeper.requestCompact(focus, e.when === 'turn-end' ? 'turn-end' : 'before-expiry') }
   })
 
   on('command.run', { command: 'keep-going' }, async ($, e) => {

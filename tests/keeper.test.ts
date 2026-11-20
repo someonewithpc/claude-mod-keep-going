@@ -340,6 +340,32 @@ describe('compaction', () => {
     expect(f.keeper.core.compact.request).toBe(null)
   })
 
+  test('a turn-end request made during a turn compacts once that turn ends', async () => {
+    const f = fakeOf({ compact: { enabled: true, trigger: 'request' } })
+    await turn(f, 'answer')
+    await f.keeper.onTurnStart()
+    await f.keeper.requestCompact('the plan', 'turn-end')
+    await f.advance(MIN)
+    expect(f.compacted).toEqual([])
+    await f.keeper.onTurnComplete('answer', 'done')
+    await f.advance(1000)
+    expect(f.compacted).toEqual(['the plan'])
+    expect(f.keeper.core.compact.request).toBe(null)
+  })
+
+  test('a turn-end request still waits for running subagents', async () => {
+    const f = fakeOf({ compact: { enabled: true, trigger: 'request' } })
+    f.agents = 1
+    await turn(f, 'answer')
+    await f.keeper.requestCompact('the plan', 'turn-end')
+    await f.advance(MIN)
+    expect(f.compacted).toEqual([])
+    f.agents = 0
+    await turn(f, 'answer')
+    await f.advance(1000)
+    expect(f.compacted).toEqual(['the plan'])
+  })
+
   test('a compaction by the person drops a pending request', async () => {
     const f = fakeOf({ compact: { enabled: true, trigger: 'request' } })
     await turn(f, 'answer')

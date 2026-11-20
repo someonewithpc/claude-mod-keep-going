@@ -43,7 +43,7 @@ export type KeepGoingFallback = {
 }
 
 export type KeepGoingCompact = {
-  request: { at: number; focus: string } | null
+  request: { at: number; focus: string; when?: 'before-expiry' | 'turn-end' } | null
   lastSentAt: number
   handledIdleSince: number
   lastMatchedAnswer: string | null

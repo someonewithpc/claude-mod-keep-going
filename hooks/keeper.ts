@@ -2,7 +2,7 @@ import type { SessionRateLimit } from 'claude-code'
 
 import { overloadWaitMs, INCIDENT_GAP_MS } from './backoff'
 import { classify, nativeNoticeOf, resetAtOf, type Failure } from './classify'
-import { decideCompact } from './compact'
+import { decideCompact, type CompactWhen } from './compact'
 import { DEFAULTS, type Config } from './config'
 import { parseResetTime, calculateWaitMs } from './lib/time-parser.js'
 import { badgeOf, viewOf, clockOf, durationOf } from './view'
@@ -836,20 +836,22 @@ export class Keeper {
     return had ? 'Dropped what was pending for this session.' : 'Nothing was pending.'
   }
 
-  async requestCompact(focus: string): Promise<string> {
+  async requestCompact(focus: string, when: CompactWhen = 'before-expiry'): Promise<string> {
     const now = await this.io.now()
     if (!this.config.compact.enabled || this.config.compact.trigger === 'policy') {
       return 'Compaction requests are off. Set compact.enabled and compact.trigger to "request" or "both".'
     }
-    this.core.compact.request = { at: now, focus }
+    this.core.compact.request = { at: now, focus, when }
     if (this.core.compact.handledIdleSince === this.core.activity.idleSince) this.core.compact.handledIdleSince = 0
     await this.save()
+    const keeping = focus ? `, keeping: ${focus}` : ''
+    if (when === 'turn-end') return `Compaction requested. It runs as soon as this turn ends${keeping}.`
     const saved = await this.io.cacheExpiresAt().catch(() => null)
     const ttl = this.cacheTtl((await this.io.context()).isSubscription, saved).ms
     const margin = this.config.compact.settle.mode === 'before-expiry'
       ? ttl - this.config.compact.settle.marginSeconds * 1000
       : this.config.compact.settle.minutes * 60_000
-    return `Compaction requested. It runs once the session has been idle for ${durationOf(margin)}${focus ? `, keeping: ${focus}` : ''}.`
+    return `Compaction requested. It runs once the session has been idle for ${durationOf(margin)}${keeping}.`
   }
 }
 
